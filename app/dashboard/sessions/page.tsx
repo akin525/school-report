@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [schoolId, setSchoolId] = useState('');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -11,7 +12,11 @@ export default function SessionsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => { setSchoolId(d.user.school_id); loadData(d.user.school_id); });
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      setUser(d.user);
+      setSchoolId(d.user.school_id);
+      loadData(d.user.school_id);
+    });
   }, []);
 
   const loadData = async (sid: string) => {
@@ -43,7 +48,9 @@ export default function SessionsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div><h1 className="text-2xl font-bold text-gray-800">Academic Sessions</h1><p className="text-gray-500 text-sm mt-1">Manage school academic sessions/years</p></div>
-        <button onClick={() => openModal()} className="btn-primary">+ Add Session</button>
+        {(user?.role === 'superadmin' || user?.role === 'school_admin') && (
+          <button onClick={() => openModal()} className="btn-primary">+ Add Session</button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -58,12 +65,14 @@ export default function SessionsPage() {
               </div>
               {s.is_current && <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full font-bold">CURRENT</span>}
             </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={() => openModal(s)} className="btn-secondary text-xs py-1.5 px-3">Edit</button>
-              {!s.is_current && (
-                <button onClick={async () => { await fetch('/api/sessions', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: s.id, name: s.name, start_year: s.start_year, end_year: s.end_year, is_current: true }) }); loadData(schoolId); }} className="btn-success text-xs py-1.5 px-3">Set Current</button>
-              )}
-            </div>
+            {(user?.role === 'superadmin' || user?.role === 'school_admin') && (
+              <div className="flex gap-2 mt-4">
+                <button onClick={() => openModal(s)} className="btn-secondary text-xs py-1.5 px-3">Edit</button>
+                {!s.is_current && (
+                  <button onClick={async () => { await fetch('/api/sessions', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: s.id, name: s.name, start_year: s.start_year, end_year: s.end_year, is_current: true }) }); loadData(schoolId); }} className="btn-success text-xs py-1.5 px-3">Set Current</button>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>

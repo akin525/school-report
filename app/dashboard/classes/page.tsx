@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 export default function ClassesPage() {
   const [classes, setClasses] = useState<any[]>([]);
   const [allSubjects, setAllSubjects] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [schoolId, setSchoolId] = useState('');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -15,7 +16,11 @@ export default function ClassesPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => { setSchoolId(d.user.school_id); loadData(d.user.school_id); });
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      setUser(d.user);
+      setSchoolId(d.user.school_id);
+      loadData(d.user.school_id);
+    });
   }, []);
 
   const loadData = async (sid: string) => {
@@ -75,7 +80,9 @@ export default function ClassesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div><h1 className="text-2xl font-bold text-gray-800">Classes & Arms</h1><p className="text-gray-500 text-sm mt-1">{classes.length} class{classes.length !== 1 ? 'es' : ''}</p></div>
-        <button onClick={() => openModal()} className="btn-primary">+ Add Class</button>
+        {(user?.role === 'superadmin' || user?.role === 'school_admin') && (
+          <button onClick={() => openModal()} className="btn-primary">+ Add Class</button>
+        )}
       </div>
 
       {loading ? (
@@ -97,11 +104,13 @@ export default function ClassesPage() {
                         <span className={`mt-2 inline-block text-xs px-2 py-0.5 rounded-full font-medium ${cat === 'nursery' ? 'bg-green-100 text-green-700' : cat === 'primary' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{cat}</span>
                       </div>
                     </div>
-                    <div className="flex gap-2 mt-4">
-                      <button onClick={() => openSubjectModal(cls)} className="btn-success text-xs py-1.5 px-3">📚 Subjects</button>
-                      <button onClick={() => openModal(cls)} className="btn-secondary text-xs py-1.5 px-3">Edit</button>
-                      <button onClick={() => deleteClass(cls.id)} className="btn-danger text-xs py-1.5 px-3">Delete</button>
-                    </div>
+                    {(user?.role === 'superadmin' || user?.role === 'school_admin') && (
+                      <div className="flex gap-2 mt-4">
+                        <button onClick={() => openSubjectModal(cls)} className="btn-success text-xs py-1.5 px-3">📚 Subjects</button>
+                        <button onClick={() => openModal(cls)} className="btn-secondary text-xs py-1.5 px-3">Edit</button>
+                        <button onClick={() => deleteClass(cls.id)} className="btn-danger text-xs py-1.5 px-3">Delete</button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

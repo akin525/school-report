@@ -4,12 +4,15 @@ import Link from 'next/link';
 
 export default function ReportsPage() {
   const [schoolId, setSchoolId] = useState('');
+  const [user, setUser] = useState<any>(null);
+  const [teacher, setTeacher] = useState<any>(null);
   const [sessions, setSessions] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [selectedSession, setSelectedSession] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('1');
+  const [reportFormat, setReportFormat] = useState<'single' | 'cumulative'>('cumulative');
   const [reportType, setReportType] = useState<'individual' | 'broadsheet'>('individual');
   const [loading, setLoading] = useState(false);
 
@@ -19,12 +22,30 @@ export default function ReportsPage() {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
       const sid = d.user.school_id;
       setSchoolId(sid);
-      Promise.all([fetch(`/api/sessions?schoolId=${sid}`).then(r => r.json()), fetch(`/api/classes?schoolId=${sid}`).then(r => r.json())])
-        .then(([sess, cls]) => {
-          setSessions(sess); setClasses(cls);
-          const curr = sess.find((s: any) => s.is_current) || sess[0];
-          if (curr) setSelectedSession(curr.id);
-        });
+      setUser(d.user);
+      setTeacher(d.teacher);
+
+      Promise.all([
+        fetch(`/api/sessions?schoolId=${sid}`).then(r => r.json()),
+        fetch(`/api/classes?schoolId=${sid}`).then(r => r.json())
+      ]).then(([sess, cls]) => {
+        setSessions(sess);
+
+        // Filter classes for teachers
+        if (d.user.role === 'teacher') {
+          fetch(`/api/teachers/assignments?teacherId=${d.teacher.id}&schoolId=${sid}`)
+            .then(r => r.json())
+            .then(assigns => {
+              const assignedClassIds = new Set(assigns.map((a: any) => a.class_id));
+              setClasses(cls.filter((c: any) => assignedClassIds.has(c.id)));
+            });
+        } else {
+          setClasses(cls);
+        }
+
+        const curr = sess.find((s: any) => s.is_current) || sess[0];
+        if (curr) setSelectedSession(curr.id);
+      });
     });
   }, []);
 
@@ -55,7 +76,7 @@ export default function ReportsPage() {
 
       {/* Filters */}
       <div className="card">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="label">Session</label>
             <select className="input" value={selectedSession} onChange={e => setSelectedSession(e.target.value)}>
@@ -76,6 +97,13 @@ export default function ReportsPage() {
               <option value="1">1st Term</option>
               <option value="2">2nd Term</option>
               <option value="3">3rd Term</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Report Format</label>
+            <select className="input font-medium text-blue-700" value={reportFormat} onChange={e => setReportFormat(e.target.value as any)}>
+              <option value="cumulative">📊 Cumulative Report</option>
+              <option value="single">📋 Single Term Report</option>
             </select>
           </div>
         </div>
@@ -113,7 +141,7 @@ export default function ReportsPage() {
                   </div>
                   <div className="flex gap-2 mt-4">
                     <Link
-                      href={`/dashboard/reports/card?studentId=${student.id}&sessionId=${selectedSession}&term=${selectedTerm}`}
+                      href={`/dashboard/reports/card?studentId=${student.id}&sessionId=${selectedSession}&term=${selectedTerm}&format=${reportFormat}`}
                       className="btn-primary text-xs py-1.5 flex-1 text-center"
                     >
                       View Report Card

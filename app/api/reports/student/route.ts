@@ -30,6 +30,14 @@ export async function GET(req: NextRequest) {
   // Get school info
   const school = db.prepare('SELECT * FROM schools WHERE id = ?').get(schoolId) as any;
 
+  // Get class teacher
+  const classTeacher = db.prepare(`
+    SELECT t.name
+    FROM teacher_assignments ta
+    JOIN teachers t ON t.id = ta.teacher_id
+    WHERE ta.class_id = ? AND ta.session_id = ? AND ta.subject_id IS NULL AND ta.school_id = ?
+  `).get(student.class_id, sessionId, schoolId) as any;
+
   // Get session info
   const academicSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as any;
 
@@ -152,6 +160,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     student,
     school,
+    classTeacher: classTeacher || null,
     session: academicSession,
     termData,
     subjectCumulative,

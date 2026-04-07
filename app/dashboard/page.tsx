@@ -58,11 +58,11 @@ export default function DashboardPage() {
   );
 
   const statCards = [
-    { label: 'Total Students', value: stats.students, icon: '👨‍🎓', color: 'blue', href: '/dashboard/students' },
-    { label: 'Total Teachers', value: stats.teachers, icon: '👨‍🏫', color: 'green', href: '/dashboard/teachers' },
-    { label: 'Classes', value: stats.classes, icon: '🏛️', color: 'purple', href: '/dashboard/classes' },
-    { label: 'Subjects', value: stats.subjects, icon: '📚', color: 'orange', href: '/dashboard/subjects' },
-  ];
+    { label: 'Total Students', value: stats.students, icon: '👨‍🎓', color: 'blue', href: '/dashboard/students', roles: ['superadmin', 'school_admin', 'teacher'] },
+    { label: 'Total Teachers', value: stats.teachers, icon: '👨‍🏫', color: 'green', href: '/dashboard/teachers', roles: ['superadmin', 'school_admin'] },
+    { label: 'Classes', value: stats.classes, icon: '🏛️', color: 'purple', href: '/dashboard/classes', roles: ['superadmin', 'school_admin'] },
+    { label: 'Subjects', value: stats.subjects, icon: '📚', color: 'orange', href: '/dashboard/subjects', roles: ['superadmin', 'school_admin'] },
+  ].filter(card => user && card.roles.includes(user.role));
 
   const colorMap: Record<string, string> = {
     blue: 'bg-blue-50 border-blue-200 text-blue-700',
@@ -72,13 +72,13 @@ export default function DashboardPage() {
   };
 
   const quickLinks = [
-    { href: '/dashboard/students', icon: '👨‍🎓', title: 'Manage Students', desc: 'Add, edit, view student records' },
-    { href: '/dashboard/scores', icon: '📝', title: 'Enter Scores', desc: 'Input CA and exam scores by term' },
-    { href: '/dashboard/reports', icon: '📊', title: 'Generate Reports', desc: 'Print individual report cards' },
-    { href: '/dashboard/reports?type=broadsheet', icon: '📋', title: 'Broadsheet', desc: 'View class performance overview' },
-    { href: '/dashboard/teachers', icon: '👨‍🏫', title: 'Manage Teachers', desc: 'Add teachers & assign subjects' },
-    { href: '/dashboard/classes', icon: '🏛️', title: 'Manage Classes', desc: 'Configure classes and arms' },
-  ];
+    { href: '/dashboard/students', icon: '👨‍🎓', title: 'Manage Students', desc: 'Add, edit, view student records', roles: ['superadmin', 'school_admin', 'teacher'] },
+    { href: '/dashboard/scores', icon: '📝', title: 'Enter Scores', desc: 'Input CA and exam scores by term', roles: ['superadmin', 'school_admin', 'teacher'] },
+    { href: '/dashboard/reports', icon: '📊', title: 'Generate Reports', desc: 'Print individual report cards', roles: ['superadmin', 'school_admin', 'teacher'] },
+    { href: '/dashboard/reports?type=broadsheet', icon: '📋', title: 'Broadsheet', desc: 'View class performance overview', roles: ['superadmin', 'school_admin', 'teacher'] },
+    { href: '/dashboard/teachers', icon: '👨‍🏫', title: 'Manage Teachers', desc: 'Add teachers & assign subjects', roles: ['superadmin', 'school_admin'] },
+    { href: '/dashboard/classes', icon: '🏛️', title: 'Manage Classes', desc: 'Configure classes and arms', roles: ['superadmin', 'school_admin'] },
+  ].filter(link => user && link.roles.includes(user.role));
 
   return (
     <div className="space-y-6">

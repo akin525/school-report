@@ -21,12 +21,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const { name, address, phone, email, website, logo_url, motto } = await req.json();
+  const { name, address, phone, email, website, logo_url, motto, max_ca1, max_ca2, max_exam } = await req.json();
   const db = getDb();
   db.prepare(`
-    UPDATE schools SET name=?, address=?, phone=?, email=?, website=?, logo_url=?, motto=?
+    UPDATE schools SET name=?, address=?, phone=?, email=?, website=?, logo_url=?, motto=?, max_ca1=?, max_ca2=?, max_exam=?
     WHERE id=?
-  `).run(name, address, phone, email, website, logo_url, motto, id);
+  `).run(name, address, phone, email, website, logo_url, motto, max_ca1 ?? 20, max_ca2 ?? 20, max_exam ?? 60, id);
 
   return NextResponse.json(db.prepare('SELECT * FROM schools WHERE id=?').get(id));
 }

@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
            ses.name as session_name
     FROM teacher_assignments ta
     JOIN teachers t ON t.id = ta.teacher_id
-    JOIN subjects s ON s.id = ta.subject_id
+    LEFT JOIN subjects s ON s.id = ta.subject_id
     JOIN classes c ON c.id = ta.class_id
     JOIN sessions ses ON ses.id = ta.session_id
     WHERE ta.school_id = ?
@@ -44,8 +44,15 @@ export async function POST(req: NextRequest) {
   const db = getDb();
   const id = uuidv4();
   try {
+    // Check if a primary teacher is already assigned to this class (subject-less)
+    if (!subjectId) {
+      const existing = db.prepare('SELECT id FROM teacher_assignments WHERE teacher_id=? AND class_id=? AND session_id=? AND subject_id IS NULL')
+        .get(teacherId, classId, sessionId);
+      if (existing) return NextResponse.json({ error: 'Teacher is already assigned to this class' }, { status: 409 });
+    }
+
     db.prepare('INSERT INTO teacher_assignments (id, school_id, teacher_id, subject_id, class_id, session_id) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(id, sId, teacherId, subjectId, classId, sessionId);
+      .run(id, sId, teacherId, subjectId || null, classId, sessionId);
     return NextResponse.json(db.prepare('SELECT * FROM teacher_assignments WHERE id=?').get(id), { status: 201 });
   } catch (e: any) {
     if (e.message?.includes('UNIQUE')) {
