@@ -8,7 +8,6 @@ export const metadata: Metadata = {
   title: 'School Report System',
   description: 'Multi-tenant school report card management system',
 };
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
