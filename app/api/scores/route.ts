@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
-  const { studentId, subjectId, classId, sessionId, term, ca_score, exam_score, schoolId } = body;
+  const { studentId, subjectId, classId, sessionId, term, ca1_score, ca2_score, exam_score, schoolId } = body;
   const sId = schoolId || session.schoolId;
 
   const db = getDb();
@@ -49,13 +49,13 @@ export async function POST(req: NextRequest) {
     .get(studentId, subjectId, sessionId, term) as any;
 
   if (existing) {
-    db.prepare('UPDATE scores SET ca_score=?, exam_score=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
-      .run(ca_score ?? 0, exam_score ?? 0, existing.id);
+    db.prepare('UPDATE scores SET ca1_score=?, ca2_score=?, exam_score=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+      .run(ca1_score ?? 0, ca2_score ?? 0, exam_score ?? 0, existing.id);
     return NextResponse.json(db.prepare('SELECT * FROM scores WHERE id=?').get(existing.id));
   } else {
     const id = uuidv4();
-    db.prepare('INSERT INTO scores (id, school_id, student_id, subject_id, class_id, session_id, term, ca_score, exam_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(id, sId, studentId, subjectId, classId, sessionId, term, ca_score ?? 0, exam_score ?? 0);
+    db.prepare('INSERT INTO scores (id, school_id, student_id, subject_id, class_id, session_id, term, ca1_score, ca2_score, exam_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, sId, studentId, subjectId, classId, sessionId, term, ca1_score ?? 0, ca2_score ?? 0, exam_score ?? 0);
     return NextResponse.json(db.prepare('SELECT * FROM scores WHERE id=?').get(id), { status: 201 });
   }
 }
@@ -73,12 +73,12 @@ export async function PUT(req: NextRequest) {
       const existing = db.prepare('SELECT id FROM scores WHERE student_id=? AND subject_id=? AND session_id=? AND term=?')
         .get(sc.studentId, sc.subjectId, sc.sessionId, sc.term) as any;
       if (existing) {
-        db.prepare('UPDATE scores SET ca_score=?, exam_score=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
-          .run(sc.ca_score ?? 0, sc.exam_score ?? 0, existing.id);
+        db.prepare('UPDATE scores SET ca1_score=?, ca2_score=?, exam_score=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+          .run(sc.ca1_score ?? 0, sc.ca2_score ?? 0, sc.exam_score ?? 0, existing.id);
       } else {
         const id = uuidv4();
-        db.prepare('INSERT INTO scores (id, school_id, student_id, subject_id, class_id, session_id, term, ca_score, exam_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .run(id, sId, sc.studentId, sc.subjectId, sc.classId, sc.sessionId, sc.term, sc.ca_score ?? 0, sc.exam_score ?? 0);
+        db.prepare('INSERT INTO scores (id, school_id, student_id, subject_id, class_id, session_id, term, ca1_score, ca2_score, exam_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .run(id, sId, sc.studentId, sc.subjectId, sc.classId, sc.sessionId, sc.term, sc.ca1_score ?? 0, sc.ca2_score ?? 0, sc.exam_score ?? 0);
       }
     }
   });

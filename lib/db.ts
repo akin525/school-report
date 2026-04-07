@@ -33,6 +33,9 @@ function initializeSchema(db: Database.Database) {
       website TEXT,
       logo_url TEXT,
       motto TEXT,
+      max_ca1 REAL DEFAULT 20,
+      max_ca2 REAL DEFAULT 20,
+      max_exam REAL DEFAULT 60,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -103,7 +106,7 @@ function initializeSchema(db: Database.Database) {
       id TEXT PRIMARY KEY,
       school_id TEXT NOT NULL,
       teacher_id TEXT NOT NULL,
-      subject_id TEXT NOT NULL,
+      subject_id TEXT, -- Made optional for Primary teachers
       class_id TEXT NOT NULL,
       session_id TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -153,9 +156,10 @@ function initializeSchema(db: Database.Database) {
       class_id TEXT NOT NULL,
       session_id TEXT NOT NULL,
       term INTEGER NOT NULL CHECK(term IN (1,2,3)),
-      ca_score REAL DEFAULT 0,
+      ca1_score REAL DEFAULT 0,
+      ca2_score REAL DEFAULT 0,
       exam_score REAL DEFAULT 0,
-      total REAL GENERATED ALWAYS AS (ca_score + exam_score) STORED,
+      total REAL GENERATED ALWAYS AS (ca1_score + ca2_score + exam_score) STORED,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,

@@ -23,6 +23,14 @@ export async function GET(req: NextRequest) {
   const school = db.prepare('SELECT * FROM schools WHERE id=?').get(schoolId) as any;
   const academicSession = db.prepare('SELECT * FROM sessions WHERE id=?').get(sessionId) as any;
 
+  // Get class teacher
+  const classTeacher = db.prepare(`
+    SELECT t.name
+    FROM teacher_assignments ta
+    JOIN teachers t ON t.id = ta.teacher_id
+    WHERE ta.class_id = ? AND ta.session_id = ? AND ta.subject_id IS NULL AND ta.school_id = ?
+  `).get(classId, sessionId, schoolId) as any;
+
   // Get all students in class
   const students = db.prepare(`
     SELECT * FROM students WHERE class_id=? AND school_id=? ORDER BY last_name, first_name
@@ -104,6 +112,7 @@ export async function GET(req: NextRequest) {
     school,
     session: academicSession,
     class: classInfo,
+    classTeacher: classTeacher || null,
     term: parseInt(term),
     subjects,
     broadsheet,

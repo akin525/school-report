@@ -23,6 +23,8 @@ function ReportCardContent() {
   const searchParams = useSearchParams();
   const studentId = searchParams.get('studentId');
   const sessionId = searchParams.get('sessionId');
+  const termParam = parseInt(searchParams.get('term') || '3');
+  const format = searchParams.get('format') || 'cumulative';
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editComments, setEditComments] = useState(false);
@@ -76,7 +78,12 @@ function ReportCardContent() {
   );
   if (!report || !report.student) return <div className="min-h-screen flex items-center justify-center"><p className="text-red-600">Report not found</p></div>;
 
-  const { student, school, session, subjectCumulative, termData } = report;
+  const { student, school, session, subjectCumulative, termData, classTeacher } = report;
+
+  // Determine what term to show in the first columns for single report
+  const activeTerm = format === 'single' ? termParam : 1;
+  const activeTermLabel = activeTerm === 1 ? '1st TERM' : activeTerm === 2 ? '2nd TERM' : '3rd TERM';
+  const activeTermBg = activeTerm === 1 ? '#fef2f2' : activeTerm === 2 ? '#f0f9ff' : '#fafaf0';
 
   const getAge = (dob: string) => {
     if (!dob) return '';
@@ -111,10 +118,16 @@ function ReportCardContent() {
 
       {/* Report Card */}
       <div className="p-4 flex justify-center">
-        <div ref={printRef} id="report-card" className="bg-white shadow-lg" style={{ width: '297mm', minHeight: '210mm', fontFamily: 'Arial, sans-serif', fontSize: '9px' }}>
+        <div ref={printRef} id="report-card" className="bg-white shadow-lg" 
+          style={{ 
+            width: format === 'single' ? '210mm' : '297mm', 
+            minHeight: format === 'single' ? '285mm' : '200mm', 
+            fontFamily: 'Arial, sans-serif', 
+            fontSize: '9px' 
+          }}>
 
           {/* OUTER BORDER */}
-          <div style={{ border: '3px solid #dc2626', padding: '6px', minHeight: '200mm' }}>
+          <div style={{ border: '3px solid #dc2626', padding: '6px', minHeight: format === 'single' ? '275mm' : '190mm' }}>
 
             {/* HEADER ROW */}
             <div style={{ display: 'flex', gap: '6px', marginBottom: '4px' }}>
@@ -134,7 +147,7 @@ function ReportCardContent() {
                   <div key={trait.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #fee2e2', padding: '2px 0', gap: '2px' }}>
                     <span style={{ fontSize: '7px', lineHeight: 1.2, flex: 1 }}>{trait.label}</span>
                     <div style={{ display: 'flex', gap: '1px', flexWrap: 'wrap' }}>
-                      {[1,2,3].map(term => (
+                      {[1,2,3].filter(t => format === 'cumulative' ? t <= termParam : t === termParam).map(term => (
                         editComments ? (
                           <select key={term} value={traits[term]?.[trait.key] || ''} onChange={e => setTraits(prev => ({ ...prev, [term]: { ...prev[term], [trait.key]: e.target.value } }))}
                             style={{ width: '18px', fontSize: '6px', border: '1px solid #ccc', padding: '0' }}>
@@ -152,7 +165,7 @@ function ReportCardContent() {
                 ))}
                 {/* Term labels */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1px', marginTop: '2px' }}>
-                  {['1','2','3'].map(t => <span key={t} style={{ width: '14px', fontSize: '6px', textAlign: 'center', color: '#6b7280' }}>T{t}</span>)}
+                  {['1','2','3'].filter(t => format === 'cumulative' ? parseInt(t) <= termParam : parseInt(t) === termParam).map(t => <span key={t} style={{ width: '14px', fontSize: '6px', textAlign: 'center', color: '#6b7280' }}>T{t}</span>)}
                 </div>
 
                 {/* Physical Dev */}
@@ -167,7 +180,7 @@ function ReportCardContent() {
                 {/* Attendance */}
                 <div style={{ marginTop: '4px', fontSize: '7px', borderTop: '1px solid #dc2626', paddingTop: '3px' }}>
                   <div style={{ fontWeight: 'bold', color: '#dc2626', marginBottom: '2px' }}>ATTENDANCE:</div>
-                  {[1,2,3].map(term => (
+                  {[1,2,3].filter(t => format === 'cumulative' ? t <= termParam : t === termParam).map(term => (
                     <div key={term} style={{ marginBottom: '2px' }}>
                       <span style={{ fontWeight: 'bold' }}>T{term}: </span>
                       {editComments ? (
@@ -210,9 +223,17 @@ function ReportCardContent() {
                 {/* School Header */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                    {/* Logo placeholder */}
-                    <div style={{ width: '40px', height: '40px', border: '2px solid #1e40af', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: '#eff6ff' }}>
-                      <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#1e40af', textAlign: 'center', lineHeight: 1.1 }}>HH</span>
+                    {/* Logo */}
+                    <div style={{ width: '50px', height: '50px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                      {school.logo_url ? (
+                        <img src={school.logo_url} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', border: '2px solid #1e40af', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eff6ff' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#1e40af', textAlign: 'center', lineHeight: 1.1 }}>
+                            {school.name.substring(0, 2).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e40af', lineHeight: 1, letterSpacing: '-0.5px' }}>{school.name}</div>
@@ -278,8 +299,8 @@ function ReportCardContent() {
                 </div>
 
                 {/* Term Overall Scores */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '3px', marginBottom: '3px' }}>
-                  {[1,2,3].map(term => (
+                <div style={{ display: 'grid', gridTemplateColumns: format === 'single' ? '1fr' : termParam === 1 ? '1fr' : termParam === 2 ? '1fr 1fr' : '1fr 1fr 1fr', gap: '3px', marginBottom: '3px' }}>
+                  {[1,2,3].filter(t => format === 'cumulative' ? t <= termParam : t === termParam).map(term => (
                     <div key={term} style={{ border: '1.5px solid #dc2626', textAlign: 'center', padding: '2px', background: termData[term]?.overallPercentage ? '#eff6ff' : '#f9fafb' }}>
                       <div style={{ fontWeight: 'bold', fontSize: '7px', color: '#1e40af' }}>{ordinal(term)} TERM OVERALL SCORE:</div>
                       <div style={{ fontWeight: 'bold', fontSize: '14px', color: termData[term]?.overallPercentage >= 70 ? '#166534' : '#dc2626' }}>
@@ -290,73 +311,82 @@ function ReportCardContent() {
                 </div>
 
                 {/* MAIN SCORES TABLE */}
-                <div style={{ border: '1.5px solid #dc2626', overflow: 'hidden', marginBottom: '3px' }}>
+                <div style={{ border: '1.5px solid #dc2626', overflow: 'hidden', marginBottom: '3px', width: '100%' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '7.5px' }}>
                     <thead>
                       <tr style={{ background: '#fee2e2' }}>
                         <td rowSpan={2} style={{ padding: '2px 3px', fontWeight: 'bold', border: '1px solid #fca5a5', width: '70px', fontSize: '8px', color: '#991b1b' }}>SUBJECTS</td>
-                        {/* 1st Term */}
-                        <td colSpan={6} style={{ padding: '1px', textAlign: 'center', fontWeight: 'bold', border: '1px solid #fca5a5', background: '#fef2f2', color: '#1e40af', fontSize: '7px' }}>1st TERM</td>
-                        {/* 2nd Term */}
-                        <td colSpan={6} style={{ padding: '1px', textAlign: 'center', fontWeight: 'bold', border: '1px solid #fca5a5', background: '#f0f9ff', color: '#1e40af', fontSize: '7px' }}>2nd TERM</td>
-                        {/* Cumulative 1&2 */}
-                        <td colSpan={3} style={{ padding: '1px', textAlign: 'center', fontWeight: 'bold', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534', fontSize: '7px' }}>CUM(1&2)</td>
-                        {/* 3rd Term */}
-                        <td colSpan={6} style={{ padding: '1px', textAlign: 'center', fontWeight: 'bold', border: '1px solid #fca5a5', background: '#fafaf0', color: '#1e40af', fontSize: '7px' }}>3rd TERM</td>
-                        {/* Cumulative Final */}
-                        <td colSpan={3} style={{ padding: '1px', textAlign: 'center', fontWeight: 'bold', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534', fontSize: '7px' }}>CUMULATIVE</td>
+                        {/* Primary Term (Dynamic) */}
+                        <td colSpan={6} style={{ padding: '1px', textAlign: 'center', fontWeight: 'bold', border: '1px solid #fca5a5', background: activeTermBg, color: '#1e40af', fontSize: '7px' }}>{activeTermLabel}</td>
+                        {/* Remaining terms only if cumulative */}
+                        {format === 'cumulative' && (
+                          <>
+                            <td colSpan={6} style={{ padding: '1px', textAlign: 'center', fontWeight: 'bold', border: '1px solid #fca5a5', background: '#f0f9ff', color: '#1e40af', fontSize: '7px' }}>2nd TERM</td>
+                            <td colSpan={3} style={{ padding: '1px', textAlign: 'center', fontWeight: 'bold', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534', fontSize: '7px' }}>CUM(1&2)</td>
+                            <td colSpan={6} style={{ padding: '1px', textAlign: 'center', fontWeight: 'bold', border: '1px solid #fca5a5', background: '#fafaf0', color: '#1e40af', fontSize: '7px' }}>3rd TERM</td>
+                            <td colSpan={3} style={{ padding: '1px', textAlign: 'center', fontWeight: 'bold', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534', fontSize: '7px' }}>CUMULATIVE</td>
+                          </>
+                        )}
                       </tr>
                       <tr style={{ background: '#fff7f7', fontSize: '6.5px' }}>
-                        {/* 1st Term cols */}
+                        {/* Primary Term cols */}
                         <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', whiteSpace: 'nowrap' }}>C.A</td>
                         <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Exam</td>
                         <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Total</td>
                         <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Ave</td>
                         <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Pos</td>
                         <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Grd</td>
-                        {/* 2nd Term cols */}
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>C.A</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Exam</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Total</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Ave</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Pos</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Grd</td>
-                        {/* Cum 1&2 */}
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Total</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Ave</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Grd</td>
-                        {/* 3rd Term cols */}
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>C.A</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Exam</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Total</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Ave</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Pos</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Grd</td>
-                        {/* Final Cum */}
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Total</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Ave</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Grd</td>
+                        {format === 'cumulative' && (
+                          <>
+                            {/* 2nd Term cols */}
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>C.A</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Exam</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Total</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Ave</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Pos</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Grd</td>
+                            {/* Cum 1&2 */}
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Total</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Ave</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Grd</td>
+                            {/* 3rd Term cols */}
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>C.A</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Exam</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Total</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Ave</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Pos</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Grd</td>
+                            {/* Final Cum */}
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Total</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Ave</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold' }}>Grd</td>
+                          </>
+                        )}
                       </tr>
                       <tr style={{ background: '#fee2e2', fontSize: '7px', fontWeight: 'bold', color: '#991b1b' }}>
                         <td style={{ padding: '1px 3px', border: '1px solid #fca5a5' }}>Marks Obtainable</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{report.termData[1]?.scores?.[0] ? (student.class_category === 'nursery' || student.class_category === 'primary' ? 40 : 70) : 70}</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{student.class_category === 'nursery' || student.class_category === 'primary' ? 60 : 30}</td>
+                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{(school.max_ca1 || 0) + (school.max_ca2 || 0)}</td>
+                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{school.max_exam || 0}</td>
                         <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
-                        <td colSpan={2} style={{ border: '1px solid #fca5a5' }}></td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{student.class_category === 'nursery' || student.class_category === 'primary' ? 40 : 70}</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{student.class_category === 'nursery' || student.class_category === 'primary' ? 60 : 30}</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
-                        <td colSpan={2} style={{ border: '1px solid #fca5a5' }}></td>
-                        <td style={{ border: '1px solid #fca5a5' }}></td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
-                        <td colSpan={2} style={{ border: '1px solid #fca5a5' }}></td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{student.class_category === 'nursery' || student.class_category === 'primary' ? 40 : 70}</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{student.class_category === 'nursery' || student.class_category === 'primary' ? 60 : 30}</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
-                        <td colSpan={2} style={{ border: '1px solid #fca5a5' }}></td>
-                        <td style={{ border: '1px solid #fca5a5' }}></td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
-                        <td colSpan={2} style={{ border: '1px solid #fca5a5' }}></td>
+                        <td colSpan={3} style={{ border: '1px solid #fca5a5' }}></td>
+                        {format === 'cumulative' && (
+                          <>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{(school.max_ca1 || 0) + (school.max_ca2 || 0)}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{school.max_exam || 0}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
+                            <td colSpan={2} style={{ border: '1px solid #fca5a5' }}></td>
+                            <td style={{ border: '1px solid #fca5a5' }}></td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
+                            <td colSpan={2} style={{ border: '1px solid #fca5a5' }}></td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{(school.max_ca1 || 0) + (school.max_ca2 || 0)}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{school.max_exam || 0}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
+                            <td colSpan={2} style={{ border: '1px solid #fca5a5' }}></td>
+                            <td style={{ border: '1px solid #fca5a5' }}></td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
+                            <td colSpan={2} style={{ border: '1px solid #fca5a5' }}></td>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -364,41 +394,47 @@ function ReportCardContent() {
                         const t1 = row.term1;
                         const t2 = row.term2;
                         const t3 = row.term3;
+                        const ta = format === 'single' ? (activeTerm === 1 ? t1 : activeTerm === 2 ? t2 : t3) : t1;
                         const cum12Total = ((t1?.total || 0) + (t2?.total || 0));
                         const cum12Ave = (t1 && t2) ? cum12Total / 2 : (t1 ? t1.total : (t2 ? t2.total : 0));
                         const hasData = t1 || t2 || t3;
                         return (
                           <tr key={row.subjectId} style={{ background: idx % 2 === 0 ? '#ffffff' : '#fef9f9', borderBottom: '1px solid #fee2e2' }}>
                             <td style={{ padding: '1.5px 3px', fontWeight: '600', border: '1px solid #fca5a5', fontSize: '7.5px', color: '#1e1e1e' }}>{row.subjectName}</td>
-                            {/* 1st Term */}
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{t1?.ca_score || ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{t1?.exam_score || ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{t1?.total || ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{t1?.total ? t1.total.toFixed(1) : ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{t1?.position ? ordinal(t1.position) : ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t1 ? getGradeColor(t1.grade) : '#374151' }}>{t1?.grade || ''}</td>
-                            {/* 2nd Term */}
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{t2?.ca_score || ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{t2?.exam_score || ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{t2?.total || ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{t2?.total ? t2.total.toFixed(1) : ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{t2?.position ? ordinal(t2.position) : ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t2 ? getGradeColor(t2.grade) : '#374151' }}>{t2?.grade || ''}</td>
-                            {/* Cum 1+2 */}
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: '#166534' }}>{(t1 || t2) ? cum12Total : ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534' }}>{(t1 || t2) ? cum12Ave.toFixed(1) : ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: (t1 || t2) ? getGradeColor(t1?.grade || t2?.grade) : '#374151' }}>{(t1 || t2) ? (t1?.grade || t2?.grade) : ''}</td>
-                            {/* 3rd Term */}
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{t3?.ca_score || ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{t3?.exam_score || ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{t3?.total || ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{t3?.total ? t3.total.toFixed(1) : ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{t3?.position ? ordinal(t3.position) : ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t3 ? getGradeColor(t3.grade) : '#374151' }}>{t3?.grade || ''}</td>
-                            {/* Final Cumulative */}
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: '#166534' }}>{hasData ? row.cumTotal : ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534' }}>{hasData ? row.cumAve : ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: hasData ? getGradeColor(row.cumGrade) : '#374151' }}>{hasData ? row.cumGrade : ''}</td>
+                            {/* Primary Term (Dynamic) */}
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{(ta?.ca1_score || 0) + (ta?.ca2_score || 0) || ''}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{ta?.exam_score || ''}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{ta?.total || ''}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{ta?.total ? ta.total.toFixed(1) : ''}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{ta?.position ? ordinal(ta.position) : ''}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: ta ? getGradeColor(ta.grade) : '#374151' }}>{ta?.grade || ''}</td>
+                            
+                            {format === 'cumulative' && (
+                              <>
+                                {/* 2nd Term */}
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{(t2?.ca1_score || 0) + (t2?.ca2_score || 0) || ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{t2?.exam_score || ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{t2?.total || ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{t2?.total ? t2.total.toFixed(1) : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{t2?.position ? ordinal(t2.position) : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t2 ? getGradeColor(t2.grade) : '#374151' }}>{t2?.grade || ''}</td>
+                                {/* Cum 1+2 */}
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 2 && (t1 || t2)) ? cum12Total : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 2 && (t1 || t2)) ? cum12Ave.toFixed(1) : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: (termParam >= 2 && (t1 || t2)) ? getGradeColor(t1?.grade || t2?.grade) : '#374151' }}>{(termParam >= 2 && (t1 || t2)) ? (t1?.grade || t2?.grade) : ''}</td>
+                                {/* 3rd Term */}
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{(t3?.ca1_score || 0) + (t3?.ca2_score || 0) || ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{t3?.exam_score || ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{t3?.total || ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{t3?.total ? t3.total.toFixed(1) : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{t3?.position ? ordinal(t3.position) : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t3 ? getGradeColor(t3.grade) : '#374151' }}>{t3?.grade || ''}</td>
+                                {/* Final Cumulative */}
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 3 && hasData) ? row.cumTotal : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 3 && hasData) ? row.cumAve : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: (termParam >= 3 && hasData) ? getGradeColor(row.cumGrade) : '#374151' }}>{(termParam >= 3 && hasData) ? row.cumGrade : ''}</td>
+                              </>
+                            )}
                           </tr>
                         );
                       })}
@@ -406,18 +442,23 @@ function ReportCardContent() {
                       <tr style={{ background: '#1e3a8a', color: 'white', fontWeight: 'bold' }}>
                         <td style={{ padding: '2px 3px', border: '1px solid #3b82f6', fontSize: '8px' }}>TOTAL</td>
                         <td colSpan={2} style={{ border: '1px solid #3b82f6' }}></td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px' }}>{termData[1]?.total || ''}</td>
+                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px' }}>{termData[activeTerm]?.total || ''}</td>
                         <td colSpan={2} style={{ border: '1px solid #3b82f6' }}></td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px', color: '#fde047' }}>{termData[1]?.overallPosition ? ordinal(termData[1].overallPosition) : ''}</td>
-                        <td colSpan={2} style={{ border: '1px solid #3b82f6' }}></td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px' }}>{termData[2]?.total || ''}</td>
-                        <td colSpan={2} style={{ border: '1px solid #3b82f6' }}></td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px', color: '#fde047' }}>{termData[2]?.overallPosition ? ordinal(termData[2].overallPosition) : ''}</td>
-                        <td colSpan={3} style={{ border: '1px solid #3b82f6' }}></td>
-                        <td colSpan={3} style={{ border: '1px solid #3b82f6' }}></td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px' }}>{termData[3]?.total || ''}</td>
-                        <td colSpan={2} style={{ border: '1px solid #3b82f6' }}></td>
-                        <td colSpan={3} style={{ border: '1px solid #3b82f6' }}></td>
+                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px', color: '#fde047' }}>{termData[activeTerm]?.overallPosition ? ordinal(termData[activeTerm].overallPosition) : ''}</td>
+                        
+                        {format === 'cumulative' && (
+                          <>
+                            <td colSpan={2} style={{ border: '1px solid #3b82f6' }}></td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px' }}>{termData[2]?.total || ''}</td>
+                            <td colSpan={2} style={{ border: '1px solid #3b82f6' }}></td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px', color: '#fde047' }}>{termData[2]?.overallPosition ? ordinal(termData[2].overallPosition) : ''}</td>
+                            <td colSpan={3} style={{ border: '1px solid #3b82f6' }}></td>
+                            <td colSpan={3} style={{ border: '1px solid #3b82f6' }}></td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px' }}>{termData[3]?.total || ''}</td>
+                            <td colSpan={2} style={{ border: '1px solid #3b82f6' }}></td>
+                            <td colSpan={3} style={{ border: '1px solid #3b82f6' }}></td>
+                          </>
+                        )}
                       </tr>
                     </tbody>
                   </table>
@@ -430,9 +471,9 @@ function ReportCardContent() {
                   63-66 = D (Very Good Pass), 60-62 = D- (Good Pass), Below 59 = F (Fail)
                 </div>
 
-                {/* Comments Section - 3 columns for 3 terms */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '3px', marginBottom: '3px' }}>
-                  {[1, 2, 3].map(term => (
+                {/* Comments Section */}
+                <div style={{ display: 'grid', gridTemplateColumns: format === 'single' ? '1fr' : termParam === 1 ? '1fr' : termParam === 2 ? '1fr 1fr' : '1fr 1fr 1fr', gap: '3px', marginBottom: '3px' }}>
+                  {[1, 2, 3].filter(t => format === 'cumulative' ? t <= termParam : t === termParam).map(term => (
                     <div key={term} style={{ border: '1.5px solid #dc2626', padding: '4px', fontSize: '7.5px' }}>
                       <div style={{ fontWeight: 'bold', color: '#1e40af', marginBottom: '2px', fontSize: '7px', borderBottom: '1px solid #fca5a5', paddingBottom: '1px' }}>
                         Class Teacher's Comment:
@@ -449,13 +490,16 @@ function ReportCardContent() {
                           {comments[term]?.class_teacher_comment || ''}
                         </div>
                       )}
-                      <div style={{ marginTop: '3px', fontSize: '6.5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>Signature ___________</span>
-                        {editComments ? (
-                          <input type="text" placeholder="Date" value={comments[term]?.class_teacher_date || ''} onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], class_teacher_date: e.target.value } }))} style={{ width: '60px', fontSize: '6px', border: '1px solid #ccc' }} />
-                        ) : (
-                          <span>Date: {comments[term]?.class_teacher_date || ''}</span>
-                        )}
+                      <div style={{ marginTop: '3px', fontSize: '6.5px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>Signature ___________</span>
+                          {editComments ? (
+                            <input type="text" placeholder="Date" value={comments[term]?.class_teacher_date || ''} onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], class_teacher_date: e.target.value } }))} style={{ width: '60px', fontSize: '6px', border: '1px solid #ccc' }} />
+                          ) : (
+                            <span>Date: {comments[term]?.class_teacher_date || ''}</span>
+                          )}
+                        </div>
+                        <div style={{ fontWeight: 'bold', textDecoration: 'underline' }}>{classTeacher?.name || '—'}</div>
                       </div>
                       <div style={{ marginTop: '4px', fontWeight: 'bold', color: '#1e40af', fontSize: '7px', borderTop: '1px solid #fca5a5', paddingTop: '2px', marginBottom: '2px' }}>
                         Coordinator's Remarks:
@@ -497,7 +541,7 @@ function ReportCardContent() {
                 {/* Save button in edit mode */}
                 {editComments && (
                   <div style={{ textAlign: 'center', marginBottom: '4px' }}>
-                    <button onClick={() => { saveComments(1); saveComments(2); saveComments(3); }} disabled={saving}
+                    <button onClick={() => { [1,2,3].filter(t => format === 'cumulative' ? t <= termParam : t === termParam).forEach(t => saveComments(t)); }} disabled={saving}
                       style={{ background: '#16a34a', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 16px', fontSize: '9px', cursor: 'pointer', fontWeight: 'bold' }}>
                       {saving ? 'Saving...' : '💾 Save All Comments'}
                     </button>
@@ -513,8 +557,11 @@ function ReportCardContent() {
         @media print {
           .no-print { display: none !important; }
           body { margin: 0; padding: 0; background: white; }
-          #report-card { box-shadow: none !important; width: 100% !important; }
-          @page { size: A4 landscape; margin: 5mm; }
+          #report-card { box-shadow: none !important; width: 100% !important; height: auto !important; min-height: 0 !important; }
+          @page { 
+            size: A4 ${format === 'single' ? 'portrait' : 'landscape'}; 
+            margin: 3mm; 
+          }
         }
       `}</style>
     </div>

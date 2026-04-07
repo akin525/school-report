@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 export default function SettingsPage() {
   const [school, setSchool] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
-  const [form, setForm] = useState({ name: '', address: '', phone: '', email: '', website: '', logo_url: '', motto: '' });
+  const [form, setForm] = useState({ name: '', address: '', phone: '', email: '', website: '', logo_url: '', motto: '', max_ca1: 20, max_ca2: 20, max_exam: 60 });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState('');
@@ -16,7 +16,8 @@ export default function SettingsPage() {
       if (d.school) {
         setForm({
           name: d.school.name || '', address: d.school.address || '', phone: d.school.phone || '',
-          email: d.school.email || '', website: d.school.website || '', logo_url: d.school.logo_url || '', motto: d.school.motto || ''
+          email: d.school.email || '', website: d.school.website || '', logo_url: d.school.logo_url || '', motto: d.school.motto || '',
+          max_ca1: d.school.max_ca1 ?? 20, max_ca2: d.school.max_ca2 ?? 20, max_exam: d.school.max_exam ?? 60
         });
       }
     });
@@ -36,7 +37,7 @@ export default function SettingsPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: base64String, filename: file.name, subDir: 'schools' }),
         });
-        
+
         if (res.ok) {
           const { url } = await res.json();
           setForm({ ...form, logo_url: url });
@@ -77,43 +78,71 @@ export default function SettingsPage() {
         <h2 className="text-lg font-bold text-gray-700 border-b pb-3">School Information</h2>
         <div>
           <label className="label">School Name *</label>
-          <input className="input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+          <input className="input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} disabled={user?.role === 'teacher'} />
         </div>
         <div>
           <label className="label">Address</label>
-          <textarea className="input" rows={2} value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
+          <textarea className="input" rows={2} value={form.address} onChange={e => setForm({...form, address: e.target.value})} disabled={user?.role === 'teacher'} />
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <div><label className="label">Phone</label><input className="input" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
-          <div><label className="label">Email</label><input type="email" className="input" value={form.email} onChange={e => setForm({...form, email: e.target.value})} /></div>
+          <div><label className="label">Phone</label><input className="input" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} disabled={user?.role === 'teacher'} /></div>
+          <div><label className="label">Email</label><input type="email" className="input" value={form.email} onChange={e => setForm({...form, email: e.target.value})} disabled={user?.role === 'teacher'} /></div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-          <div><label className="label">Website</label><input className="input" placeholder="e.g. hallmarkschools.ng" value={form.website} onChange={e => setForm({...form, website: e.target.value})} /></div>
+          <div><label className="label">Website</label><input className="input" placeholder="e.g. hallmarkschools.ng" value={form.website} onChange={e => setForm({...form, website: e.target.value})} disabled={user?.role === 'teacher'} /></div>
           <div>
             <label className="label">School Logo</label>
             <div className="flex items-center gap-3">
               {form.logo_url ? (
                 <div className="relative w-12 h-12 rounded border overflow-hidden">
                   <img src={form.logo_url} className="w-full h-full object-cover" alt="Logo" />
-                  <button onClick={() => setForm({...form, logo_url: ''})} className="absolute top-0 right-0 bg-red-500 text-white p-0.5 text-[8px]">×</button>
+                  {user?.role !== 'teacher' && <button onClick={() => setForm({...form, logo_url: ''})} className="absolute top-0 right-0 bg-red-500 text-white p-0.5 text-[8px]">×</button>}
                 </div>
               ) : (
                 <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-xl">🏫</div>
               )}
-              <input type="file" accept="image/*" className="text-xs w-full" onChange={handleFileUpload} disabled={uploading} />
+              {user?.role !== 'teacher' && <input type="file" accept="image/*" className="text-xs w-full" onChange={handleFileUpload} disabled={uploading} />}
             </div>
             {uploading && <p className="text-[10px] text-blue-600 animate-pulse mt-1">Uploading logo...</p>}
           </div>
         </div>
         <div>
           <label className="label">School Motto</label>
-          <input className="input" placeholder="e.g. Excellence in Education" value={form.motto} onChange={e => setForm({...form, motto: e.target.value})} />
+          <input className="input" placeholder=" Excellence in Education" value={form.motto} onChange={e => setForm({...form, motto: e.target.value})} disabled={user?.role === 'teacher'} />
         </div>
-        <div className="flex justify-end pt-2">
-          <button onClick={saveSettings} disabled={saving || !form.name} className="btn-primary px-8">
-            {saving ? 'Saving...' : '💾 Save Settings'}
-          </button>
+
+        <h2 className="text-lg font-bold text-gray-700 border-b pb-3 pt-4">Score Distribution</h2>
+        <p className="text-xs text-gray-500 mb-2">Define how the total 100% score is shared. Total must be 100.</p>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="label">CA1 Max</label>
+            <input type="number" className="input" value={form.max_ca1} onChange={e => setForm({...form, max_ca1: parseFloat(e.target.value) || 0})} disabled={user?.role === 'teacher'} />
+          </div>
+          <div>
+            <label className="label">CA2 Max</label>
+            <input type="number" className="input" value={form.max_ca2} onChange={e => setForm({...form, max_ca2: parseFloat(e.target.value) || 0})} disabled={user?.role === 'teacher'} />
+          </div>
+          <div>
+            <label className="label">Exam Max</label>
+            <input type="number" className="input" value={form.max_exam} onChange={e => setForm({...form, max_exam: parseFloat(e.target.value) || 0})} disabled={user?.role === 'teacher'} />
+          </div>
         </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className={`${(form.max_ca1 + form.max_ca2 + form.max_exam) === 100 ? 'text-green-600' : 'text-red-600'} font-bold`}>
+            Total: {form.max_ca1 + form.max_ca2 + form.max_exam}%
+          </span>
+          {(form.max_ca1 + form.max_ca2 + form.max_exam) !== 100 && (
+            <span className="text-red-500 text-xs">Must equal 100%</span>
+          )}
+        </div>
+
+        {user?.role !== 'teacher' && (
+          <div className="flex justify-end pt-2">
+            <button onClick={saveSettings} disabled={saving || !form.name || (form.max_ca1 + form.max_ca2 + form.max_exam) !== 100} className="btn-primary px-8">
+              {saving ? 'Saving...' : '💾 Save Settings'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="card">

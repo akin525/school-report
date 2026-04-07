@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 
 export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [schoolId, setSchoolId] = useState('');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -12,7 +13,11 @@ export default function SubjectsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => { setSchoolId(d.user.school_id); loadData(d.user.school_id); });
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      setUser(d.user);
+      setSchoolId(d.user.school_id);
+      loadData(d.user.school_id);
+    });
   }, []);
 
   const loadData = async (sid: string) => {
@@ -51,7 +56,9 @@ export default function SubjectsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div><h1 className="text-2xl font-bold text-gray-800">Subjects</h1><p className="text-gray-500 text-sm mt-1">{filtered.length} subject{filtered.length !== 1 ? 's' : ''}</p></div>
-        <button onClick={() => openModal()} className="btn-primary">+ Add Subject</button>
+        {(user?.role === 'superadmin' || user?.role === 'school_admin') && (
+          <button onClick={() => openModal()} className="btn-primary">+ Add Subject</button>
+        )}
       </div>
 
       <div className="card">
@@ -77,7 +84,7 @@ export default function SubjectsPage() {
                 <th className="table-header text-left">Subject Name</th>
                 <th className="table-header text-left">Code</th>
                 <th className="table-header text-left">Category</th>
-                <th className="table-header text-left">Actions</th>
+                {(user?.role === 'superadmin' || user?.role === 'school_admin') && <th className="table-header text-left">Actions</th>}
               </tr></thead>
               <tbody>
                 {filtered.map((s, i) => (
@@ -85,12 +92,14 @@ export default function SubjectsPage() {
                     <td className="table-cell font-medium">{s.name}</td>
                     <td className="table-cell font-mono text-xs text-gray-600">{s.code || '—'}</td>
                     <td className="table-cell"><span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${catColors[s.category]}`}>{s.category}</span></td>
-                    <td className="table-cell">
-                      <div className="flex gap-2">
-                        <button onClick={() => openModal(s)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
-                        <button onClick={() => deleteSubject(s.id)} className="text-red-600 hover:text-red-800 text-xs font-medium">Delete</button>
-                      </div>
-                    </td>
+                    {(user?.role === 'superadmin' || user?.role === 'school_admin') && (
+                      <td className="table-cell">
+                        <div className="flex gap-2">
+                          <button onClick={() => openModal(s)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
+                          <button onClick={() => deleteSubject(s.id)} className="text-red-600 hover:text-red-800 text-xs font-medium">Delete</button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

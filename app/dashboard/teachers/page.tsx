@@ -7,6 +7,7 @@ export default function TeachersPage() {
   const [classes, setClasses] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [schoolId, setSchoolId] = useState('');
   const [currentSession, setCurrentSession] = useState('');
   const [loading, setLoading] = useState(true);
@@ -20,6 +21,7 @@ export default function TeachersPage() {
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(data => {
+      setUser(data.user);
       const sid = data.user.school_id;
       setSchoolId(sid);
       loadData(sid);
@@ -72,7 +74,7 @@ export default function TeachersPage() {
   };
 
   const saveAssignment = async () => {
-    if (!assignForm.subjectId || !assignForm.classId || !assignForm.sessionId) return;
+    if (!assignForm.classId || !assignForm.sessionId) return;
     setSaving(true);
     await fetch('/api/teachers/assignments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...assignForm, teacherId: selectedTeacher.id, schoolId }) });
     loadAssignments(selectedTeacher.id);
@@ -97,7 +99,9 @@ export default function TeachersPage() {
           <h1 className="text-2xl font-bold text-gray-800">Teachers</h1>
           <p className="text-gray-500 text-sm mt-1">{teachers.length} teacher{teachers.length !== 1 ? 's' : ''}</p>
         </div>
-        <button onClick={() => openModal()} className="btn-primary">+ Add Teacher</button>
+        {(user?.role === 'superadmin' || user?.role === 'school_admin') && (
+          <button onClick={() => openModal()} className="btn-primary">+ Add Teacher</button>
+        )}
       </div>
 
       <div className="card p-0 overflow-hidden">
@@ -114,7 +118,7 @@ export default function TeachersPage() {
                 <th className="table-header text-left">Email</th>
                 <th className="table-header text-left">Phone</th>
                 <th className="table-header text-left">Qualification</th>
-                <th className="table-header text-left">Actions</th>
+                {(user?.role === 'superadmin' || user?.role === 'school_admin') && <th className="table-header text-left">Actions</th>}
               </tr></thead>
               <tbody>
                 {teachers.map((t, i) => (
@@ -124,13 +128,15 @@ export default function TeachersPage() {
                     <td className="table-cell text-gray-600">{t.email || '—'}</td>
                     <td className="table-cell">{t.phone || '—'}</td>
                     <td className="table-cell">{t.qualification || '—'}</td>
-                    <td className="table-cell">
-                      <div className="flex gap-2">
-                        <button onClick={() => openAssignModal(t)} className="text-green-600 hover:text-green-800 text-xs font-medium">Assign</button>
-                        <button onClick={() => openModal(t)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
-                        <button onClick={() => deleteTeacher(t.id)} className="text-red-600 hover:text-red-800 text-xs font-medium">Delete</button>
-                      </div>
-                    </td>
+                    {(user?.role === 'superadmin' || user?.role === 'school_admin') && (
+                      <td className="table-cell">
+                        <div className="flex gap-2">
+                          <button onClick={() => openAssignModal(t)} className="text-green-600 hover:text-green-800 text-xs font-medium">Assign</button>
+                          <button onClick={() => openModal(t)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
+                          <button onClick={() => deleteTeacher(t.id)} className="text-red-600 hover:text-red-800 text-xs font-medium">Delete</button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -200,18 +206,21 @@ export default function TeachersPage() {
                 <div><label className="label">Class</label>
                   <select className="input" value={assignForm.classId} onChange={e => setAssignForm({...assignForm, classId: e.target.value})}>
                     <option value="">Select</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
                   </select>
                 </div>
-                <div><label className="label">Subject</label>
-                  <select className="input" value={assignForm.subjectId} onChange={e => setAssignForm({...assignForm, subjectId: e.target.value})}>
-                    <option value="">Select</option>
-                    {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
+                {selectedTeacher.category === 'secondary' && (
+                  <div>
+                    <label className="label">Subject (Optional if Class Teacher)</label>
+                    <select className="input" value={assignForm.subjectId} onChange={e => setAssignForm({...assignForm, subjectId: e.target.value})}>
+                      <option value="">Select (Assign as Class Teacher)</option>
+                      {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                )}
               </div>
-              <button onClick={saveAssignment} disabled={saving || !assignForm.subjectId || !assignForm.classId} className="btn-success w-full">
-                + Assign Subject
+              <button onClick={saveAssignment} disabled={saving || !assignForm.classId} className="btn-success w-full">
+                {selectedTeacher.category === 'primary' || !assignForm.subjectId ? '+ Assign Class' : '+ Assign Subject'}
               </button>
               <div className="border-t pt-4">
                 <h4 className="font-semibold text-sm text-gray-700 mb-3">Current Assignments</h4>
@@ -222,7 +231,7 @@ export default function TeachersPage() {
                     {assignments.map(a => (
                       <div key={a.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
                         <div className="text-sm">
-                          <span className="font-medium">{a.subject_name}</span>
+                          <span className="font-medium">{a.subject_name || 'All Subjects'}</span>
                           <span className="text-gray-500"> — {a.class_name} ({a.session_name})</span>
                         </div>
                         <button onClick={() => deleteAssignment(a.id)} className="text-red-500 hover:text-red-700 text-xs">Remove</button>

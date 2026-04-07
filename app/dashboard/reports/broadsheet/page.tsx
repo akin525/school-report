@@ -43,7 +43,7 @@ function BroadsheetContent() {
   );
   if (!data) return <div className="min-h-screen flex items-center justify-center"><p className="text-red-600">No data found</p></div>;
 
-  const { school, session, class: classInfo, subjects, broadsheet, classSize } = data;
+  const { school, session, class: classInfo, classTeacher, subjects, broadsheet, classSize } = data;
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -60,10 +60,15 @@ function BroadsheetContent() {
         <div className="bg-white shadow-lg overflow-x-auto" id="broadsheet" style={{ fontFamily: 'Arial, sans-serif', fontSize: '8px' }}>
           <div style={{ border: '2px solid #dc2626', padding: '8px' }}>
             {/* Header */}
-            <div style={{ textAlign: 'center', marginBottom: '8px' }}>
-              <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: '#1e40af', margin: 0 }}>{school?.name}</h1>
-              <p style={{ fontSize: '9px', color: '#374151', margin: '2px 0' }}>{school?.address}</p>
-              <p style={{ fontSize: '9px', color: '#374151', margin: '2px 0' }}>Tel: {school?.phone}</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '8px' }}>
+              {school?.logo_url && (
+                <img src={school.logo_url} alt="Logo" style={{ width: '40px', height: '40px', objectFit: 'contain' }} />
+              )}
+              <div style={{ textAlign: 'center' }}>
+                <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: '#1e40af', margin: 0 }}>{school?.name}</h1>
+                <p style={{ fontSize: '9px', color: '#374151', margin: '2px 0' }}>{school?.address}</p>
+                <p style={{ fontSize: '9px', color: '#374151', margin: '2px 0' }}>Tel: {school?.phone}</p>
+              </div>
             </div>
             <div style={{ background: '#fde047', border: '1.5px solid #dc2626', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', padding: '4px', marginBottom: '8px' }}>
               CLASS BROADSHEET — {ordinal(parseInt(term))} TERM — Session: {session?.name} — Class: {classInfo?.name} {classInfo?.arm}

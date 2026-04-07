@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 export default function StudentsPage() {
   const [students, setStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [schoolId, setSchoolId] = useState('');
   const [filterClass, setFilterClass] = useState('');
   const [search, setSearch] = useState('');
@@ -19,6 +20,7 @@ export default function StudentsPage() {
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(data => {
+      setUser(data.user);
       const sid = data.user.school_id;
       setSchoolId(sid);
       loadData(sid);
@@ -61,7 +63,7 @@ export default function StudentsPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: base64String, filename: file.name }),
         });
-        
+
         if (res.ok) {
           const { url } = await res.json();
           setForm({ ...form, photo_url: url });
@@ -112,9 +114,11 @@ export default function StudentsPage() {
           <h1 className="text-2xl font-bold text-gray-800">Students</h1>
           <p className="text-gray-500 text-sm mt-1">{filtered.length} student{filtered.length !== 1 ? 's' : ''} found</p>
         </div>
-        <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
-          <span>+</span> Add Student
-        </button>
+        {user?.role !== 'teacher' && (
+          <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
+            <span>+</span> Add Student
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -151,7 +155,7 @@ export default function StudentsPage() {
                   <th className="table-header text-left">Class</th>
                   <th className="table-header text-left">Age</th>
                   <th className="table-header text-left">Gender</th>
-                  <th className="table-header text-left">Actions</th>
+                  {user?.role !== 'teacher' && <th className="table-header text-left">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -171,12 +175,14 @@ export default function StudentsPage() {
                     <td className="table-cell"><span className="badge-primary">{s.class_name || '—'}</span></td>
                     <td className="table-cell">{getAge(s.date_of_birth) || '—'}</td>
                     <td className="table-cell capitalize">{s.gender || '—'}</td>
-                    <td className="table-cell">
-                      <div className="flex gap-2">
-                        <button onClick={() => openModal(s)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
-                        <button onClick={() => deleteStudent(s.id)} className="text-red-600 hover:text-red-800 text-xs font-medium">Delete</button>
-                      </div>
-                    </td>
+                    {user?.role !== 'teacher' && (
+                      <td className="table-cell">
+                        <div className="flex gap-2">
+                          <button onClick={() => openModal(s)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
+                          <button onClick={() => deleteStudent(s.id)} className="text-red-600 hover:text-red-800 text-xs font-medium">Delete</button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -240,7 +246,7 @@ export default function StudentsPage() {
                     {form.photo_url && (
                       <div className="relative w-20 h-20 rounded-lg overflow-hidden border">
                         <img src={form.photo_url} alt="Preview" className="w-full h-full object-cover" />
-                        <button 
+                        <button
                           onClick={() => setForm({...form, photo_url: ''})}
                           className="absolute top-0 right-0 bg-red-500 text-white p-1 text-[10px] hover:bg-red-600"
                         >
@@ -248,10 +254,10 @@ export default function StudentsPage() {
                         </button>
                       </div>
                     )}
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                       onChange={handleFileUpload}
                       disabled={uploading}
                     />
