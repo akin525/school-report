@@ -1,7 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { getAge } from '@/lib/utils';
 
 export default function StudentsPage() {
+  const router = useRouter();
   const [students, setStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
@@ -17,15 +20,27 @@ export default function StudentsPage() {
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkData, setBulkData] = useState<any[]>([]);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [showBulkImageModal, setShowBulkImageModal] = useState(false);
+  const [bulkImageFiles, setBulkImageFiles] = useState<File[]>([]);
+  const [bulkImageResults, setBulkImageStatus] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(data => {
-      setUser(data.user);
-      const sid = data.user.school_id;
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      if (d.error || !d.user) {
+        router.push('/login');
+        return;
+      }
+      setUser(d.user);
+      const sid = d.user.school_id;
       setSchoolId(sid);
       loadData(sid);
+    }).catch(() => {
+      router.push('/login');
     });
-  }, []);
+  }, [router]);
 
   const loadData = async (sid: string) => {
     setLoading(true);
@@ -95,17 +110,112 @@ export default function StudentsPage() {
     loadData(schoolId);
   };
 
+  const downloadTemplate = () => {
+    const headers = ['first_name', 'middle_name', 'last_name', 'admission_number', 'admission_year', 'gender', 'date_of_birth', 'class_name'];
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\nJohn,Doe,Smith,HHC/24/001,2024,male,2015-05-20,JS1 A";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "student_bulk_upload_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleBulkCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n');
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      
+      const data = lines.slice(1).filter(line => line.trim()).map(line => {
+        const values = line.split(',').map(v => v.trim());
+        const obj: any = {};
+        headers.forEach((header, index) => {
+          obj[header] = values[index];
+        });
+        
+        // Map class name to ID
+        if (obj.class_name) {
+          const cls = classes.find(c => `${c.name} ${c.arm}`.toLowerCase() === obj.class_name.toLowerCase() || c.name.toLowerCase() === obj.class_name.toLowerCase());
+          if (cls) obj.class_id = cls.id;
+        }
+        return obj;
+      });
+      
+      setBulkData(data);
+      setShowBulkModal(true);
+    };
+    reader.readAsText(file);
+  };
+
+  const processBulkUpload = async () => {
+    setBulkProcessing(true);
+    try {
+      const res = await fetch('/api/students/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ students: bulkData, schoolId })
+      });
+      if (res.ok) {
+        alert('Bulk upload successful!');
+        setShowBulkModal(false);
+        loadData(schoolId);
+      } else {
+        const err = await res.json();
+        alert('Error: ' + err.error);
+      }
+    } catch (e) {
+      alert('Upload failed');
+    }
+    setBulkProcessing(false);
+  };
+
+  const handleBulkImages = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setBulkImageFiles(files);
+    setBulkImageStatus(null);
+    setShowBulkImageModal(true);
+  };
+
+  const processBulkImages = async () => {
+    setBulkProcessing(true);
+    const formData = new FormData();
+    bulkImageFiles.forEach(file => formData.append('images', file));
+    formData.append('schoolId', schoolId);
+
+    try {
+      const res = await fetch('/api/students/bulk-images', {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await res.json();
+      if (res.ok) {
+        setBulkImageStatus({
+          success: result.count,
+          failed: result.failed,
+          errors: result.errors
+        });
+        loadData(schoolId);
+      } else {
+        alert('Error: ' + result.error);
+      }
+    } catch (e) {
+      alert('Upload failed');
+    }
+    setBulkProcessing(false);
+  };
+
   const filtered = students.filter(s => {
     const matchClass = !filterClass || s.class_id === filterClass;
     const matchSearch = !search || `${s.first_name} ${s.last_name} ${s.admission_number}`.toLowerCase().includes(search.toLowerCase());
     return matchClass && matchSearch;
   });
-
-  const getAge = (dob: string) => {
-    if (!dob) return '';
-    const diff = Date.now() - new Date(dob).getTime();
-    return Math.floor(diff / (365.25 * 24 * 3600 * 1000));
-  };
 
   return (
     <div className="space-y-6">
@@ -115,9 +225,27 @@ export default function StudentsPage() {
           <p className="text-gray-500 text-sm mt-1">{filtered.length} student{filtered.length !== 1 ? 's' : ''} found</p>
         </div>
         {user?.role !== 'teacher' && (
-          <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
-            <span>+</span> Add Student
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="relative group">
+              <button className="btn-secondary flex items-center gap-2">
+                <span>📁</span> Bulk Upload
+              </button>
+              <div className="absolute right-0 mt-1 w-48 bg-white border rounded-lg shadow-xl hidden group-hover:block z-20">
+                <button onClick={downloadTemplate} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm border-b">Download Template</button>
+                <label className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm block cursor-pointer border-b">
+                  Upload CSV
+                  <input type="file" accept=".csv" className="hidden" onChange={handleBulkCsv} />
+                </label>
+                <label className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm block cursor-pointer">
+                  Upload Images
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={handleBulkImages} />
+                </label>
+              </div>
+            </div>
+            <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
+              <span>+</span> Add Student
+            </button>
+          </div>
         )}
       </div>
 
@@ -271,6 +399,132 @@ export default function StudentsPage() {
               <button onClick={saveStudent} disabled={saving || !form.first_name || !form.last_name} className="btn-primary">
                 {saving ? 'Saving...' : editing ? 'Update Student' : 'Add Student'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Preview Modal */}
+      {showBulkModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-blue-800 text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-lg">Preview Bulk Upload ({bulkData.length} students)</h3>
+              <button onClick={() => setShowBulkModal(false)} className="text-2xl leading-none">×</button>
+            </div>
+            <div className="p-6 overflow-auto flex-1">
+              <p className="text-sm text-gray-500 mb-4 italic">* If a class name doesn't match exactly, the class will be left empty.</p>
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="p-2 border text-left">First Name</th>
+                    <th className="p-2 border text-left">Last Name</th>
+                    <th className="p-2 border text-left">Adm No.</th>
+                    <th className="p-2 border text-left">Class (Detected)</th>
+                    <th className="p-2 border text-left">Gender</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bulkData.map((s, idx) => (
+                    <tr key={idx}>
+                      <td className="p-2 border">{s.first_name}</td>
+                      <td className="p-2 border">{s.last_name}</td>
+                      <td className="p-2 border">{s.admission_number}</td>
+                      <td className="p-2 border">
+                        {s.class_id ? (
+                          <span className="text-green-600 font-medium">{s.class_name}</span>
+                        ) : (
+                          <span className="text-red-500 font-medium">{s.class_name || '—'} (No match)</span>
+                        )}
+                      </td>
+                      <td className="p-2 border">{s.gender}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t">
+              <button onClick={() => setShowBulkModal(false)} className="btn-secondary" disabled={bulkProcessing}>Cancel</button>
+              <button onClick={processBulkUpload} disabled={bulkProcessing} className="btn-primary flex items-center gap-2">
+                {bulkProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Processing...
+                  </>
+                ) : 'Confirm and Upload All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Images Modal */}
+      {showBulkImageModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-blue-800 text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-lg">Bulk Image Upload ({bulkImageFiles.length} images)</h3>
+              <button onClick={() => setShowBulkImageModal(false)} className="text-2xl leading-none">×</button>
+            </div>
+            <div className="p-6 overflow-auto flex-1">
+              {!bulkImageResults ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600">
+                    Images will be matched to students based on their <strong>Admission Number</strong>. 
+                    Ensure the filename (without extension) matches exactly. 
+                    <br/><br/>
+                    Example: <code className="bg-gray-100 px-1 rounded">HHC-24-001.jpg</code> matches student with admission number <code className="bg-gray-100 px-1 rounded">HHC-24-001</code>.
+                  </p>
+                  <div className="border rounded-lg p-4 bg-gray-50">
+                    <h4 className="font-bold text-sm mb-2">Selected Files:</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {bulkImageFiles.map((f, i) => (
+                        <span key={i} className="text-[10px] bg-white border px-2 py-1 rounded">{f.name}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-green-700">{bulkImageResults.success}</div>
+                      <div className="text-xs text-green-600 uppercase font-bold">Successfully Matched</div>
+                    </div>
+                    <div className="bg-red-50 border border-red-200 p-4 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-red-700">{bulkImageResults.failed}</div>
+                      <div className="text-xs text-red-600 uppercase font-bold">Failed/No Match</div>
+                    </div>
+                  </div>
+                  {bulkImageResults.errors.length > 0 && (
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="bg-gray-100 px-4 py-2 text-xs font-bold border-b">Error Details</div>
+                      <div className="max-h-48 overflow-y-auto p-4 space-y-1">
+                        {bulkImageResults.errors.map((err, i) => (
+                          <div key={i} className="text-[10px] text-red-600">• {err}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t">
+              {!bulkImageResults ? (
+                <>
+                  <button onClick={() => setShowBulkImageModal(false)} className="btn-secondary" disabled={bulkProcessing}>Cancel</button>
+                  <button onClick={processBulkImages} disabled={bulkProcessing} className="btn-primary flex items-center gap-2">
+                    {bulkProcessing ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Processing...
+                      </>
+                    ) : 'Match and Upload Images'}
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => setShowBulkImageModal(false)} className="btn-primary">Close</button>
+              )}
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, getGrade } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
+import { calculateGrade } from '@/lib/grading';
 import getDb from '@/lib/db';
 
 export async function GET(req: NextRequest) {
@@ -22,6 +23,7 @@ export async function GET(req: NextRequest) {
   const classInfo = db.prepare('SELECT * FROM classes WHERE id=?').get(classId) as any;
   const school = db.prepare('SELECT * FROM schools WHERE id=?').get(schoolId) as any;
   const academicSession = db.prepare('SELECT * FROM sessions WHERE id=?').get(sessionId) as any;
+  const grading = db.prepare('SELECT * FROM grading_system WHERE school_id=? ORDER BY min_score DESC').all(schoolId) as any[];
 
   // Get class teacher
   const classTeacher = db.prepare(`
@@ -64,7 +66,7 @@ export async function GET(req: NextRequest) {
           ca: score.ca_score,
           exam: score.exam_score,
           total: score.total,
-          grade: getGrade(score.total),
+          grade: calculateGrade(score.total, 100, grading).grade,
         };
         grandTotal += score.total;
         subjectCount++;
@@ -111,6 +113,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     school,
     session: academicSession,
+    grading,
     class: classInfo,
     classTeacher: classTeacher || null,
     term: parseInt(term),

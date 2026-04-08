@@ -1,8 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [schoolId, setSchoolId] = useState('');
   const [user, setUser] = useState<any>(null);
   const [teacher, setTeacher] = useState<any>(null);
@@ -20,6 +22,10 @@ export default function ReportsPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('type') === 'broadsheet') setReportType('broadsheet');
     fetch('/api/auth/me').then(r => r.json()).then(d => {
+      if (d.error || !d.user) {
+        router.push('/login');
+        return;
+      }
       const sid = d.user.school_id;
       setSchoolId(sid);
       setUser(d.user);
@@ -46,8 +52,10 @@ export default function ReportsPage() {
         const curr = sess.find((s: any) => s.is_current) || sess[0];
         if (curr) setSelectedSession(curr.id);
       });
+    }).catch(() => {
+      router.push('/login');
     });
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (selectedClass && schoolId) {

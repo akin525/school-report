@@ -1,7 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function ClassesPage() {
+  const router = useRouter();
   const [classes, setClasses] = useState<any[]>([]);
   const [allSubjects, setAllSubjects] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
@@ -17,11 +19,17 @@ export default function ClassesPage() {
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
+      if (d.error || !d.user) {
+        router.push('/login');
+        return;
+      }
       setUser(d.user);
       setSchoolId(d.user.school_id);
       loadData(d.user.school_id);
+    }).catch(() => {
+      router.push('/login');
     });
-  }, []);
+  }, [router]);
 
   const loadData = async (sid: string) => {
     setLoading(true);

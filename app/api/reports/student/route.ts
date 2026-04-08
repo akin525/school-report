@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, getGrade } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
+import { calculateGrade } from '@/lib/grading';
 import getDb from '@/lib/db';
 
 export async function GET(req: NextRequest) {
@@ -30,6 +31,9 @@ export async function GET(req: NextRequest) {
   // Get school info
   const school = db.prepare('SELECT * FROM schools WHERE id = ?').get(schoolId) as any;
 
+  // Get grading system
+  const grading = db.prepare('SELECT * FROM grading_system WHERE school_id = ? ORDER BY min_score DESC').all(schoolId) as any[];
+
   // Get class teacher
   const classTeacher = db.prepare(`
     SELECT t.name
@@ -53,6 +57,10 @@ export async function GET(req: NextRequest) {
   // Get class size per term (to calculate position)
   const classId = student.class_id;
 
+  // Get all class subjects to have a consistent max score
+  const classSubjects = db.prepare('SELECT subject_id FROM class_subjects WHERE class_id = ? AND school_id = ?').all(student.class_id, schoolId) as any[];
+  const classSubjectCount = classSubjects.length;
+
   // For each term, calculate positions for each subject
   const termData: Record<number, any> = {};
 
@@ -66,8 +74,9 @@ export async function GET(req: NextRequest) {
       WHERE sc.class_id = ? AND sc.session_id = ? AND sc.term = ? AND sc.school_id = ?
     `).all(classId, sessionId, term, schoolId) as any[];
 
-    // Build subject position map
+    // Build subject position and average map
     const subjectPositions: Record<string, number> = {};
+    const subjectAverages: Record<string, number> = {};
     const subjectTotals: Record<string, number[]> = {};
 
     for (const cs of classScores) {
@@ -81,6 +90,8 @@ export async function GET(req: NextRequest) {
       if (studentScore) {
         subjectPositions[subId] = sorted.indexOf(studentScore.total) + 1;
       }
+      const sum = totals.reduce((a, b) => a + b, 0);
+      subjectAverages[subId] = Math.round((sum / totals.length) * 10) / 10;
     }
 
     // Class total scores for overall position
@@ -92,20 +103,26 @@ export async function GET(req: NextRequest) {
     `).all(classId, sessionId, term, schoolId) as any[];
 
     const classSize = allStudentTotals.length;
-    const studentTotal = allStudentTotals.find(s => s.student_id === studentId)?.grand_total || 0;
+    // Fallback: If student not found in class totals, get their total directly from scores
+    let studentTotal = allStudentTotals.find(s => s.student_id === studentId)?.grand_total || 0;
+    if (studentTotal === 0 && termScores.length > 0) {
+      studentTotal = termScores.reduce((sum, s) => sum + (s.total || 0), 0);
+    }
     const sortedTotals = [...allStudentTotals].sort((a, b) => b.grand_total - a.grand_total);
     const overallPosition = sortedTotals.findIndex(s => s.student_id === studentId) + 1;
 
-    // Max possible score = number of subjects * 100
-    const subjectCount = termScores.length;
+    // Max possible score = number of class subjects * 100
+    // Use the larger of classSubjectCount or the actual scores found
+    const subjectCount = Math.max(classSubjectCount, termScores.length);
     const maxScore = subjectCount * 100;
     const overallPercentage = maxScore > 0 ? Math.round((studentTotal / maxScore) * 100) : 0;
 
     termData[term] = {
       scores: termScores.map(s => ({
         ...s,
-        grade: getGrade(s.total),
+        grade: calculateGrade(s.total, 100, grading).grade,
         position: subjectPositions[s.subject_id] || 0,
+        class_average: subjectAverages[s.subject_id] || 0,
         classSize,
       })),
       total: studentTotal,
@@ -140,10 +157,10 @@ export async function GET(req: NextRequest) {
     const t2 = termData[2]?.scores.find((s: any) => s.subject_id === sub.id);
     const t3 = termData[3]?.scores.find((s: any) => s.subject_id === sub.id);
 
-    const validTerms = [t1, t2, t3].filter(Boolean);
+    const validTerms = [t1, t2, t3].filter(t => t && t.total > 0);
     const cumTotal = validTerms.reduce((sum, t) => sum + (t?.total || 0), 0);
     const cumAve = validTerms.length > 0 ? cumTotal / validTerms.length : 0;
-    const cumGrade = cumAve > 0 ? getGrade(cumAve) : '';
+    const cumGrade = cumAve > 0 ? calculateGrade(cumAve, 100, grading).grade : '';
 
     return {
       subjectId: sub.id,
@@ -160,6 +177,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     student,
     school,
+    grading,
     classTeacher: classTeacher || null,
     session: academicSession,
     termData,
