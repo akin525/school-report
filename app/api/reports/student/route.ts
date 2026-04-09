@@ -78,6 +78,7 @@ export async function GET(req: NextRequest) {
     const subjectPositions: Record<string, number> = {};
     const subjectAverages: Record<string, number> = {};
     const subjectTotals: Record<string, number[]> = {};
+    const subjectStudentCounts: Record<string, number> = {}; // To store count of students who took the exam for each subject
 
     for (const cs of classScores) {
       if (!subjectTotals[cs.subject_id]) subjectTotals[cs.subject_id] = [];
@@ -90,8 +91,9 @@ export async function GET(req: NextRequest) {
       if (studentScore) {
         subjectPositions[subId] = sorted.indexOf(studentScore.total) + 1;
       }
+      // Calculate average based on students who took the exam for this subject
       const sum = totals.reduce((a, b) => a + b, 0);
-      subjectAverages[subId] = Math.round((sum / totals.length) * 10) / 10;
+      subjectAverages[subId] = totals.length > 0 ? Math.round((sum / totals.length) * 10) / 10 : 0;
     }
 
     // Class total scores for overall position
@@ -111,10 +113,9 @@ export async function GET(req: NextRequest) {
     const sortedTotals = [...allStudentTotals].sort((a, b) => b.grand_total - a.grand_total);
     const overallPosition = sortedTotals.findIndex(s => s.student_id === studentId) + 1;
 
-    // Max possible score = number of class subjects * 100
-    // Use the larger of classSubjectCount or the actual scores found
-    const subjectCount = Math.max(classSubjectCount, termScores.length);
-    const maxScore = subjectCount * 100;
+    // Overall Percentage calculation: total score / (number of subjects taken * 100)
+    const subjectsTaken = termScores.length;
+    const maxScore = subjectsTaken * 100;
     const overallPercentage = maxScore > 0 ? Math.round((studentTotal / maxScore) * 100) : 0;
 
     termData[term] = {

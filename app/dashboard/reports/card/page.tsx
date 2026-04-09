@@ -477,6 +477,81 @@ function ReportCardContent() {
                   </table>
                 </div>
 
+                {/* Traits and Attendance Section */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                  {/* Behavioural Assessment */}
+                  <div style={{ border: '1.5px solid #dc2626' }}>
+                    <div style={{ background: '#fee2e2', padding: '2px', textAlign: 'center', fontWeight: 'bold', fontSize: '8px', borderBottom: '1.5px solid #dc2626', color: '#991b1b' }}>
+                      BEHAVIOURAL ASSESSMENT
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '7px' }}>
+                      <thead>
+                        <tr style={{ background: '#fff7f7' }}>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px 3px', textAlign: 'left' }}>TRAIT</th>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px', width: '25px' }}>1st</th>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px', width: '25px' }}>2nd</th>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px', width: '25px' }}>3rd</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { key: 'punctuality', label: 'Punctuality' },
+                          { key: 'neatness', label: 'Neatness' },
+                          { key: 'politeness', label: 'Politeness' },
+                          { key: 'honesty', label: 'Honesty' },
+                          { key: 'cooperation', label: 'Cooperation' },
+                          { key: 'leadership', label: 'Leadership' },
+                          { key: 'attentiveness', label: 'Attentiveness' }
+                        ].map(t => (
+                          <tr key={t.key}>
+                            <td style={{ border: '1px solid #fca5a5', padding: '1px 3px' }}>{t.label}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{traits[1]?.[t.key] || '-'}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{traits[2]?.[t.key] || '-'}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{traits[3]?.[t.key] || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Attendance Section */}
+                  <div style={{ border: '1.5px solid #dc2626' }}>
+                    <div style={{ background: '#fee2e2', padding: '2px', textAlign: 'center', fontWeight: 'bold', fontSize: '8px', borderBottom: '1.5px solid #dc2626', color: '#991b1b' }}>
+                      ATTENDANCE RECORD
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '7px' }}>
+                      <thead>
+                        <tr style={{ background: '#fff7f7' }}>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px 3px', textAlign: 'left' }}>TERM</th>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px' }}>Present</th>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px' }}>Absent</th>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px' }}>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[1, 2, 3].map(t => (
+                          <tr key={t}>
+                            <td style={{ border: '1px solid #fca5a5', padding: '1px 3px', fontWeight: 'bold' }}>{ordinal(t)} Term</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center' }}>{attendance[t]?.days_present || '0'}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center' }}>{attendance[t]?.days_absent || '0'}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{attendance[t]?.total_days || '0'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div style={{ padding: '4px', fontSize: '6.5px', color: '#4b5563', borderTop: '1px solid #fca5a5', background: '#fef9f9' }}>
+                      <div style={{ fontWeight: 'bold', marginBottom: '2px', textDecoration: 'underline' }}>TRAIT RATING KEY:</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px' }}>
+                        <div>5 - Excellent</div>
+                        <div>4 - Very Good</div>
+                        <div>3 - Good</div>
+                        <div>2 - Fair</div>
+                        <div>1 - Poor</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Grading Scale */}
                 <div style={{ fontSize: '6.5px', textAlign: 'center', color: '#374151', marginBottom: '3px', lineHeight: 1.5, border: '1px solid #fee2e2', padding: '2px', background: '#fef9f9' }}>
                   <strong>95-100 = A+ (Distinction), 90-94 = A (Super Performance), 87-89 = B+ (Very High), 83-86 = B (High),</strong><br />
