@@ -129,9 +129,9 @@ export default function TeachersPage() {
         const values = line.split(',').map(v => v.trim());
         const obj: any = {};
         headers.forEach((header, index) => {
-          let val = values[index];
-          if (header === 'create_login') val = (val === 'yes' || val === 'true');
-          obj[header] = val;
+          const rawVal = values[index];
+          const finalVal = header === 'create_login' ? (rawVal === 'yes' || rawVal === 'true') : rawVal;
+          obj[header] = finalVal;
         });
         return obj;
       });

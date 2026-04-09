@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+ import { useRouter } from 'next/navigation';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -8,9 +8,9 @@ export default function SettingsPage() {
   const [user, setUser] = useState<any>(null);
   const [form, setForm] = useState({ 
     name: '', address: '', phone: '', email: '', website: '', logo_url: '', motto: '', 
-    nursery_max_ca1: 20, nursery_max_ca2: 20, nursery_max_exam: 60,
-    primary_max_ca1: 20, primary_max_ca2: 20, primary_max_exam: 60,
-    secondary_max_ca1: 20, secondary_max_ca2: 20, secondary_max_exam: 60
+    nursery_max_ca1: 20, nursery_max_ca2: 20, nursery_max_exam: 60, nursery_max_weekly: 10,
+    primary_max_ca1: 20, primary_max_ca2: 20, primary_max_exam: 60, primary_max_weekly: 10,
+    secondary_max_ca1: 20, secondary_max_ca2: 20, secondary_max_exam: 60, secondary_max_weekly: 10
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -83,12 +83,15 @@ export default function SettingsPage() {
           nursery_max_ca1: d.school.nursery_max_ca1 ?? 20,
           nursery_max_ca2: d.school.nursery_max_ca2 ?? 20,
           nursery_max_exam: d.school.nursery_max_exam ?? 60,
+          nursery_max_weekly: d.school.nursery_max_weekly ?? d.school.max_weekly ?? 10,
           primary_max_ca1: d.school.primary_max_ca1 ?? d.school.max_ca1 ?? 20, 
           primary_max_ca2: d.school.primary_max_ca2 ?? d.school.max_ca2 ?? 20, 
           primary_max_exam: d.school.primary_max_exam ?? d.school.max_exam ?? 60,
+          primary_max_weekly: d.school.primary_max_weekly ?? d.school.max_weekly ?? 10,
           secondary_max_ca1: d.school.secondary_max_ca1 ?? d.school.max_ca1 ?? 20, 
           secondary_max_ca2: d.school.secondary_max_ca2 ?? d.school.max_ca2 ?? 20, 
-          secondary_max_exam: d.school.secondary_max_exam ?? d.school.max_exam ?? 60
+          secondary_max_exam: d.school.secondary_max_exam ?? d.school.max_exam ?? 60,
+          secondary_max_weekly: d.school.secondary_max_weekly ?? d.school.max_weekly ?? 10
         });
       }
     }).catch(() => {
@@ -185,8 +188,12 @@ export default function SettingsPage() {
         </div>
 
         <h2 className="text-lg font-bold text-gray-700 border-b pb-3 pt-4">Nursery Score Distribution</h2>
-        <p className="text-xs text-gray-500 mb-2">Define limits for Nursery classes. Total must be 100.</p>
-        <div className="grid grid-cols-3 gap-4">
+        <p className="text-xs text-gray-500 mb-2">Define limits for Nursery classes. Total CA+Exam must be 100.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div>
+            <label className="label">Weekly Max</label>
+            <input type="number" className="input" value={form.nursery_max_weekly} onChange={e => setForm({...form, nursery_max_weekly: parseFloat(e.target.value) || 0})} disabled={user?.role === 'teacher'} />
+          </div>
           <div>
             <label className="label">CA1 Max</label>
             <input type="number" className="input" value={form.nursery_max_ca1} onChange={e => setForm({...form, nursery_max_ca1: parseFloat(e.target.value) || 0})} disabled={user?.role === 'teacher'} />
@@ -202,7 +209,7 @@ export default function SettingsPage() {
         </div>
         <div className="flex items-center justify-between text-sm mb-4">
           <span className={`${(form.nursery_max_ca1 + form.nursery_max_ca2 + form.nursery_max_exam) === 100 ? 'text-green-600' : 'text-red-600'} font-bold`}>
-            Total: {form.nursery_max_ca1 + form.nursery_max_ca2 + form.nursery_max_exam}%
+            Total (CA1+CA2+Exam): {form.nursery_max_ca1 + form.nursery_max_ca2 + form.nursery_max_exam}%
           </span>
           {(form.nursery_max_ca1 + form.nursery_max_ca2 + form.nursery_max_exam) !== 100 && (
             <span className="text-red-500 text-xs">Must equal 100%</span>
@@ -210,8 +217,12 @@ export default function SettingsPage() {
         </div>
 
         <h2 className="text-lg font-bold text-gray-700 border-b pb-3 pt-4">Primary Score Distribution</h2>
-        <p className="text-xs text-gray-500 mb-2">Define limits for Primary classes. Total must be 100.</p>
-        <div className="grid grid-cols-3 gap-4">
+        <p className="text-xs text-gray-500 mb-2">Define limits for Primary classes. Total CA+Exam must be 100.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div>
+            <label className="label">Weekly Max</label>
+            <input type="number" className="input" value={form.primary_max_weekly} onChange={e => setForm({...form, primary_max_weekly: parseFloat(e.target.value) || 0})} disabled={user?.role === 'teacher'} />
+          </div>
           <div>
             <label className="label">CA1 Max</label>
             <input type="number" className="input" value={form.primary_max_ca1} onChange={e => setForm({...form, primary_max_ca1: parseFloat(e.target.value) || 0})} disabled={user?.role === 'teacher'} />
@@ -227,7 +238,7 @@ export default function SettingsPage() {
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className={`${(form.primary_max_ca1 + form.primary_max_ca2 + form.primary_max_exam) === 100 ? 'text-green-600' : 'text-red-600'} font-bold`}>
-            Total: {form.primary_max_ca1 + form.primary_max_ca2 + form.primary_max_exam}%
+            Total (CA1+CA2+Exam): {form.primary_max_ca1 + form.primary_max_ca2 + form.primary_max_exam}%
           </span>
           {(form.primary_max_ca1 + form.primary_max_ca2 + form.primary_max_exam) !== 100 && (
             <span className="text-red-500 text-xs">Must equal 100%</span>
@@ -235,8 +246,12 @@ export default function SettingsPage() {
         </div>
 
         <h2 className="text-lg font-bold text-gray-700 border-b pb-3 pt-4">Secondary Score Distribution</h2>
-        <p className="text-xs text-gray-500 mb-2">Define limits for Secondary classes. Total must be 100.</p>
-        <div className="grid grid-cols-3 gap-4">
+        <p className="text-xs text-gray-500 mb-2">Define limits for Secondary classes. Total CA+Exam must be 100.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div>
+            <label className="label">Weekly Max</label>
+            <input type="number" className="input" value={form.secondary_max_weekly} onChange={e => setForm({...form, secondary_max_weekly: parseFloat(e.target.value) || 0})} disabled={user?.role === 'teacher'} />
+          </div>
           <div>
             <label className="label">CA1 Max</label>
             <input type="number" className="input" value={form.secondary_max_ca1} onChange={e => setForm({...form, secondary_max_ca1: parseFloat(e.target.value) || 0})} disabled={user?.role === 'teacher'} />
@@ -252,7 +267,7 @@ export default function SettingsPage() {
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className={`${(form.secondary_max_ca1 + form.secondary_max_ca2 + form.secondary_max_exam) === 100 ? 'text-green-600' : 'text-red-600'} font-bold`}>
-            Total: {form.secondary_max_ca1 + form.secondary_max_ca2 + form.secondary_max_exam}%
+            Total (CA1+CA2+Exam): {form.secondary_max_ca1 + form.secondary_max_ca2 + form.secondary_max_exam}%
           </span>
           {(form.secondary_max_ca1 + form.secondary_max_ca2 + form.secondary_max_exam) !== 100 && (
             <span className="text-red-500 text-xs">Must equal 100%</span>

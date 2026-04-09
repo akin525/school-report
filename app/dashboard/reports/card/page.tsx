@@ -92,6 +92,16 @@ function ReportCardContent() {
 
   const { student, school, session, subjectCumulative, termData, classTeacher } = report;
 
+  const getMaxValues = () => {
+    if (!school || !student) return { ca1: 20, ca2: 20, exam: 60 };
+    const cat = student.class_category || 'secondary';
+    if (cat === 'nursery') return { ca1: school.nursery_max_ca1 || 20, ca2: school.nursery_max_ca2 || 20, exam: school.nursery_max_exam || 60 };
+    if (cat === 'primary') return { ca1: school.primary_max_ca1 || 20, ca2: school.primary_max_ca2 || 20, exam: school.primary_max_exam || 60 };
+    return { ca1: school.secondary_max_ca1 || 20, ca2: school.secondary_max_ca2 || 20, exam: school.secondary_max_exam || 60 };
+  };
+
+  const maxVals = getMaxValues();
+
   // Determine what term to show in the first columns for single report
   const activeTerm = format === 'single' ? termParam : 1;
   const activeTermLabel = activeTerm === 1 ? '1st TERM' : activeTerm === 2 ? '2nd TERM' : '3rd TERM';
@@ -378,21 +388,21 @@ function ReportCardContent() {
                       </tr>
                       <tr style={{ background: '#fee2e2', fontSize: '7px', fontWeight: 'bold', color: '#991b1b' }}>
                         <td style={{ padding: '1px 3px', border: '1px solid #fca5a5' }}>Marks Obtainable</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{(school.max_ca1 || 0) + (school.max_ca2 || 0)}</td>
-                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{school.max_exam || 0}</td>
+                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{(maxVals.ca1 || 0) + (maxVals.ca2 || 0)}</td>
+                        <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{maxVals.exam || 0}</td>
                         <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
                         <td colSpan={3} style={{ border: '1px solid #fca5a5' }}></td>
                         {format === 'cumulative' && (
                           <>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{(school.max_ca1 || 0) + (school.max_ca2 || 0)}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{school.max_exam || 0}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{(maxVals.ca1 || 0) + (maxVals.ca2 || 0)}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{maxVals.exam || 0}</td>
                             <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
                             <td colSpan={2} style={{ border: '1px solid #fca5a5' }}></td>
                             <td style={{ border: '1px solid #fca5a5' }}></td>
                             <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
                             <td colSpan={2} style={{ border: '1px solid #fca5a5' }}></td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{(school.max_ca1 || 0) + (school.max_ca2 || 0)}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{school.max_exam || 0}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{(maxVals.ca1 || 0) + (maxVals.ca2 || 0)}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>{maxVals.exam || 0}</td>
                             <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5' }}>100</td>
                             <td colSpan={2} style={{ border: '1px solid #fca5a5' }}></td>
                             <td style={{ border: '1px solid #fca5a5' }}></td>
@@ -584,7 +594,7 @@ function ReportCardContent() {
                               <img 
                                 src={comments[term].class_teacher_signature} 
                                 alt="Signature" 
-                                style={{ height: '30px', maxWidth: '60px', objectContain: 'contain' }}
+                                style={{ height: '30px', maxWidth: '60px', objectFit: 'contain' }}
                               />
                             ) : (
                               <span>___________</span>
@@ -642,7 +652,7 @@ function ReportCardContent() {
                             <img 
                               src={comments[term].coordinator_signature} 
                               alt="Signature" 
-                              style={{ height: '30px', maxWidth: '90px', objectContain: 'contain' }}
+                              style={{ height: '30px', maxWidth: '90px', objectFit: 'contain' }}
                             />
                           ) : (
                             <span>___________</span>
@@ -735,3 +745,4 @@ export default function ReportCardPage() {
     </Suspense>
   );
 }
+                                                                                                                                                                                                                                                                                                                                                                                

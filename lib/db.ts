@@ -36,15 +36,19 @@ function initializeSchema(db: Database.Database) {
       nursery_max_ca1 REAL DEFAULT 20,
       nursery_max_ca2 REAL DEFAULT 20,
       nursery_max_exam REAL DEFAULT 60,
+      nursery_max_weekly REAL DEFAULT 10,
       primary_max_ca1 REAL DEFAULT 20,
       primary_max_ca2 REAL DEFAULT 20,
       primary_max_exam REAL DEFAULT 60,
+      primary_max_weekly REAL DEFAULT 10,
       secondary_max_ca1 REAL DEFAULT 20,
       secondary_max_ca2 REAL DEFAULT 20,
       secondary_max_exam REAL DEFAULT 60,
+      secondary_max_weekly REAL DEFAULT 10,
       max_ca1 REAL DEFAULT 20,
       max_ca2 REAL DEFAULT 20,
       max_exam REAL DEFAULT 60,
+      max_weekly REAL DEFAULT 10,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
