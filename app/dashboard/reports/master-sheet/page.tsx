@@ -84,10 +84,37 @@ export default function MasterScoreSheetPage() {
 
   const handlePrint = () => window.print();
 
+  // Get dynamic max values based on class category
+  const getMaxValues = () => {
+    if (!school || !data?.class) return { weekly: 10, ca1: 20, ca2: 20, exam: 60 };
+    const cat = data.class.category || 'secondary';
+    if (cat === 'nursery') return { weekly: school.nursery_max_weekly || 10, ca1: school.nursery_max_ca1 || 20, ca2: school.nursery_max_ca2 || 20, exam: school.nursery_max_exam || 60 };
+    if (cat === 'primary') return { weekly: school.primary_max_weekly || 10, ca1: school.primary_max_ca1 || 20, ca2: school.primary_max_ca2 || 20, exam: school.primary_max_exam || 60 };
+    return { weekly: school.secondary_max_weekly || 10, ca1: school.secondary_max_ca1 || 20, ca2: school.secondary_max_ca2 || 20, exam: school.secondary_max_exam || 60 };
+  };
+
+  const maxVals = getMaxValues();
+
   const handleScoreChange = (studentId: string, field: string, value: string) => {
     const numVal = parseFloat(value) || 0;
+    const maxVals = getMaxValues();
+    
+    // Prevent entering scores higher than the set maximums
+    if (field.startsWith('t') && field !== 'total') {
+      if (numVal > maxVals.weekly) return;
+    }
+    if (field === 'exam_score' && numVal > maxVals.exam) return;
+    
     setScores(prev => {
       const current = { ...prev[studentId], [field]: numVal };
+      
+      // If a weekly assessment was changed (T1-T10), split the sum into CA1 and CA2
+      if (field.startsWith('t') && field !== 'total') {
+        const weeklyTotal = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].reduce((sum, i) => sum + (current[`t${i}`] || 0), 0);
+        current.ca1_score = Math.ceil(weeklyTotal / 2);
+        current.ca2_score = Math.floor(weeklyTotal / 2);
+      }
+      
       // Auto-calculate total: CA1 + CA2 + Exam
       current.total = (current.ca1_score || 0) + (current.ca2_score || 0) + (current.exam_score || 0);
       return { ...prev, [studentId]: current };
@@ -210,16 +237,16 @@ export default function MasterScoreSheetPage() {
                 <th rowSpan={2} className="border border-black p-1 w-8">S/N</th>
                 <th rowSpan={2} className="border border-black p-1 text-left min-w-[150px]">NAMES OF STUDENTS</th>
                 <th colSpan={10} className="border border-black p-0.5">WEEKLY ASSESSMENT SCORES (W.A.S)</th>
-                <th rowSpan={2} className="border border-black p-1 w-10">CA1</th>
-                <th rowSpan={2} className="border border-black p-1 w-10">CA2</th>
-                <th rowSpan={2} className="border border-black p-1 w-10">EXAM</th>
-                <th rowSpan={2} className="border border-black p-1 w-10">TOT</th>
+                <th rowSpan={2} className="border border-black p-1 w-10">CA1<br/><span className="font-normal">({maxVals.ca1})</span></th>
+                <th rowSpan={2} className="border border-black p-1 w-10">CA2<br/><span className="font-normal">({maxVals.ca2})</span></th>
+                <th rowSpan={2} className="border border-black p-1 w-10">EXAM<br/><span className="font-normal">({maxVals.exam})</span></th>
+                <th rowSpan={2} className="border border-black p-1 w-10">TOT<br/><span className="font-normal">(100)</span></th>
                 <th rowSpan={2} className="border border-black p-1 text-left min-w-[100px]">REMARKS</th>
               </tr>
               <tr className="bg-gray-50 text-[8px]">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
                   <th key={i} className="border border-black p-0.5 w-7 h-8">
-                    T{i}<br/><span className="font-normal">(10)</span>
+                    T{i}<br/><span className="font-normal">({maxVals.weekly})</span>
                   </th>
                 ))}
               </tr>
@@ -241,20 +268,20 @@ export default function MasterScoreSheetPage() {
                         />
                       </td>
                     ))}
-                    <td className="border border-black p-0 bg-blue-50/30">
+                    <td className="border border-black p-0 bg-blue-50/50">
                       <input
                         type="number"
-                        className="w-full h-full text-center border-none font-bold focus:ring-1 focus:ring-blue-500 bg-transparent p-0"
+                        readOnly
+                        className="w-full h-full text-center border-none font-bold bg-transparent p-0 cursor-default"
                         value={s.ca1_score || ''}
-                        onChange={e => handleScoreChange(student.id, 'ca1_score', e.target.value)}
                       />
                     </td>
-                    <td className="border border-black p-0 bg-blue-50/30">
+                    <td className="border border-black p-0 bg-blue-50/50">
                       <input
                         type="number"
-                        className="w-full h-full text-center border-none font-bold focus:ring-1 focus:ring-blue-500 bg-transparent p-0"
+                        readOnly
+                        className="w-full h-full text-center border-none font-bold bg-transparent p-0 cursor-default"
                         value={s.ca2_score || ''}
-                        onChange={e => handleScoreChange(student.id, 'ca2_score', e.target.value)}
                       />
                     </td>
                     <td className="border border-black p-0 bg-orange-50/30">

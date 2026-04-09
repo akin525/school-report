@@ -15,7 +15,7 @@ export default function ReportsPage() {
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('1');
   const [reportFormat, setReportFormat] = useState<'single' | 'cumulative'>('cumulative');
-  const [reportType, setReportType] = useState<'individual' | 'broadsheet'>('individual');
+  const [reportType, setReportType] = useState<'individual' | 'broadsheet' | 'master'>('individual');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
