@@ -262,7 +262,8 @@ function ReportCardContent() {
 
                 {/* Student Info Grid */}
                 <div style={{ border: '1.5px solid #dc2626', marginBottom: '4px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid #dc2626' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr', borderBottom: '1px solid #dc2626' }}>
+                      <div style={{ padding: '2px 4px', borderRight: '1px solid #dc2626', width: '75px' }}></div>
                     <div style={{ padding: '2px 4px', borderRight: '1px solid #dc2626', textAlign: 'center', fontWeight: 'bold', fontSize: '8px', background: '#fee2e2' }}>FIRST NAME</div>
                     <div style={{ padding: '2px 4px', borderRight: '1px solid #dc2626', textAlign: 'center', fontWeight: 'bold', fontSize: '8px', background: '#fee2e2' }}>MIDDLE NAME</div>
                     <div style={{ padding: '2px 4px', textAlign: 'center', fontWeight: 'bold', fontSize: '8px', background: '#fee2e2' }}>SURNAME</div>
