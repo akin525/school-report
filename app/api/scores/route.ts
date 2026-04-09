@@ -40,7 +40,8 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
-  const { studentId, subjectId, classId, sessionId, term, ca1_score, ca2_score, exam_score, schoolId } = body;
+  const { studentId, subjectId, classId, sessionId, term, ca1_score, ca2_score, exam_score, schoolId,
+    t1, t2, t3, t4, t5, t6, t7, t8, t9, t10 } = body;
   const sId = schoolId || session.schoolId;
 
   const db = getDb();
@@ -49,13 +50,19 @@ export async function POST(req: NextRequest) {
     .get(studentId, subjectId, sessionId, term) as any;
 
   if (existing) {
-    db.prepare('UPDATE scores SET ca1_score=?, ca2_score=?, exam_score=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
-      .run(ca1_score ?? 0, ca2_score ?? 0, exam_score ?? 0, existing.id);
+    db.prepare(`UPDATE scores SET ca1_score=?, ca2_score=?, exam_score=?, 
+      t1=?, t2=?, t3=?, t4=?, t5=?, t6=?, t7=?, t8=?, t9=?, t10=?, 
+      updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+      .run(ca1_score ?? 0, ca2_score ?? 0, exam_score ?? 0, 
+        t1 ?? 0, t2 ?? 0, t3 ?? 0, t4 ?? 0, t5 ?? 0, t6 ?? 0, t7 ?? 0, t8 ?? 0, t9 ?? 0, t10 ?? 0,
+        existing.id);
     return NextResponse.json(db.prepare('SELECT * FROM scores WHERE id=?').get(existing.id));
   } else {
     const id = uuidv4();
-    db.prepare('INSERT INTO scores (id, school_id, student_id, subject_id, class_id, session_id, term, ca1_score, ca2_score, exam_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(id, sId, studentId, subjectId, classId, sessionId, term, ca1_score ?? 0, ca2_score ?? 0, exam_score ?? 0);
+    db.prepare(`INSERT INTO scores (id, school_id, student_id, subject_id, class_id, session_id, term, ca1_score, ca2_score, exam_score,
+      t1, t2, t3, t4, t5, t6, t7, t8, t9, t10) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, sId, studentId, subjectId, classId, sessionId, term, ca1_score ?? 0, ca2_score ?? 0, exam_score ?? 0,
+        t1 ?? 0, t2 ?? 0, t3 ?? 0, t4 ?? 0, t5 ?? 0, t6 ?? 0, t7 ?? 0, t8 ?? 0, t9 ?? 0, t10 ?? 0);
     return NextResponse.json(db.prepare('SELECT * FROM scores WHERE id=?').get(id), { status: 201 });
   }
 }
@@ -73,12 +80,18 @@ export async function PUT(req: NextRequest) {
       const existing = db.prepare('SELECT id FROM scores WHERE student_id=? AND subject_id=? AND session_id=? AND term=?')
         .get(sc.studentId, sc.subjectId, sc.sessionId, sc.term) as any;
       if (existing) {
-        db.prepare('UPDATE scores SET ca1_score=?, ca2_score=?, exam_score=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
-          .run(sc.ca1_score ?? 0, sc.ca2_score ?? 0, sc.exam_score ?? 0, existing.id);
+        db.prepare(`UPDATE scores SET ca1_score=?, ca2_score=?, exam_score=?, 
+          t1=?, t2=?, t3=?, t4=?, t5=?, t6=?, t7=?, t8=?, t9=?, t10=?, 
+          updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+          .run(sc.ca1_score ?? 0, sc.ca2_score ?? 0, sc.exam_score ?? 0, 
+            sc.t1 ?? 0, sc.t2 ?? 0, sc.t3 ?? 0, sc.t4 ?? 0, sc.t5 ?? 0, sc.t6 ?? 0, sc.t7 ?? 0, sc.t8 ?? 0, sc.t9 ?? 0, sc.t10 ?? 0,
+            existing.id);
       } else {
         const id = uuidv4();
-        db.prepare('INSERT INTO scores (id, school_id, student_id, subject_id, class_id, session_id, term, ca1_score, ca2_score, exam_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .run(id, sId, sc.studentId, sc.subjectId, sc.classId, sc.sessionId, sc.term, sc.ca1_score ?? 0, sc.ca2_score ?? 0, sc.exam_score ?? 0);
+        db.prepare(`INSERT INTO scores (id, school_id, student_id, subject_id, class_id, session_id, term, ca1_score, ca2_score, exam_score,
+          t1, t2, t3, t4, t5, t6, t7, t8, t9, t10) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(id, sId, sc.studentId, sc.subjectId, sc.classId, sc.sessionId, sc.term, sc.ca1_score ?? 0, sc.ca2_score ?? 0, sc.exam_score ?? 0,
+            sc.t1 ?? 0, sc.t2 ?? 0, sc.t3 ?? 0, sc.t4 ?? 0, sc.t5 ?? 0, sc.t6 ?? 0, sc.t7 ?? 0, sc.t8 ?? 0, sc.t9 ?? 0, sc.t10 ?? 0);
       }
     }
   });
