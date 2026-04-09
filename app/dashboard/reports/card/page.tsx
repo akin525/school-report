@@ -26,6 +26,7 @@ function ReportCardContent() {
   const termParam = parseInt(searchParams.get('term') || '3');
   const format = searchParams.get('format') || 'cumulative';
   const [report, setReport] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editComments, setEditComments] = useState(false);
   const [comments, setComments] = useState<Record<number, any>>({});
@@ -37,6 +38,7 @@ function ReportCardContent() {
   useEffect(() => {
     if (studentId && sessionId) {
       fetch(`/api/auth/me`).then(r => r.json()).then(me => {
+        setUser(me.user);
         fetch(`/api/reports/student?studentId=${studentId}&sessionId=${sessionId}&schoolId=${me.user.school_id}`)
           .then(r => r.json()).then(data => {
             setReport(data);
@@ -54,8 +56,18 @@ function ReportCardContent() {
     const c = comments[term] || {};
     const a = attendance[term] || {};
     const t = traits[term] || {};
+    
+    // Ensure schoolId is passed
+    const payload = { 
+      studentId, 
+      sessionId, 
+      term, 
+      schoolId: report.school.id, 
+      ...c 
+    };
+
     await Promise.all([
-      fetch('/api/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId, sessionId, term, schoolId: report.school.id, ...c }) }),
+      fetch('/api/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
       fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId, sessionId, term, schoolId: report.school.id, ...a }) }),
       fetch('/api/traits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId, sessionId, term, schoolId: report.school.id, ...t }) }),
     ]);
@@ -262,7 +274,8 @@ function ReportCardContent() {
 
                 {/* Student Info Grid */}
                 <div style={{ border: '1.5px solid #dc2626', marginBottom: '4px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid #dc2626' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr', borderBottom: '1px solid #dc2626' }}>
+                      <div style={{ padding: '2px 4px', borderRight: '1px solid #dc2626', width: '75px' }}></div>
                     <div style={{ padding: '2px 4px', borderRight: '1px solid #dc2626', textAlign: 'center', fontWeight: 'bold', fontSize: '8px', background: '#fee2e2' }}>FIRST NAME</div>
                     <div style={{ padding: '2px 4px', borderRight: '1px solid #dc2626', textAlign: 'center', fontWeight: 'bold', fontSize: '8px', background: '#fee2e2' }}>MIDDLE NAME</div>
                     <div style={{ padding: '2px 4px', textAlign: 'center', fontWeight: 'bold', fontSize: '8px', background: '#fee2e2' }}>SURNAME</div>
@@ -299,12 +312,12 @@ function ReportCardContent() {
                 </div>
 
                 {/* Term Overall Scores */}
-                <div style={{ display: 'grid', gridTemplateColumns: format === 'single' ? '1fr' : termParam === 1 ? '1fr' : termParam === 2 ? '1fr 1fr' : '1fr 1fr 1fr', gap: '3px', marginBottom: '3px' }}>
-                  {[1,2,3].filter(t => format === 'cumulative' ? t <= termParam : t === termParam).map(term => (
+                <div style={{ display: 'grid', gridTemplateColumns: format === 'single' ? '1fr' : 'repeat(3, 1fr)', gap: '3px', marginBottom: '3px' }}>
+                  {(format === 'cumulative' ? [1, 2, 3] : [termParam]).map(term => (
                     <div key={term} style={{ border: '1.5px solid #dc2626', textAlign: 'center', padding: '2px', background: termData[term]?.overallPercentage ? '#eff6ff' : '#f9fafb' }}>
                       <div style={{ fontWeight: 'bold', fontSize: '7px', color: '#1e40af' }}>{ordinal(term)} TERM OVERALL SCORE:</div>
-                      <div style={{ fontWeight: 'bold', fontSize: '14px', color: termData[term]?.overallPercentage >= 70 ? '#166534' : '#dc2626' }}>
-                        {termData[term]?.overallPercentage || ''}%
+                      <div style={{ fontWeight: 'bold', fontSize: '14px', color: (termData[term]?.overallPercentage || 0) >= 70 ? '#166534' : '#dc2626' }}>
+                        {termData[term]?.overallPercentage ?? ''}%
                       </div>
                     </div>
                   ))}
@@ -395,8 +408,6 @@ function ReportCardContent() {
                         const t2 = row.term2;
                         const t3 = row.term3;
                         const ta = format === 'single' ? (activeTerm === 1 ? t1 : activeTerm === 2 ? t2 : t3) : t1;
-                        const cum12Total = ((t1?.total || 0) + (t2?.total || 0));
-                        const cum12Ave = (t1 && t2) ? cum12Total / 2 : (t1 ? t1.total : (t2 ? t2.total : 0));
                         const hasData = t1 || t2 || t3;
                         return (
                           <tr key={row.subjectId} style={{ background: idx % 2 === 0 ? '#ffffff' : '#fef9f9', borderBottom: '1px solid #fee2e2' }}>
@@ -405,7 +416,7 @@ function ReportCardContent() {
                             <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{(ta?.ca1_score || 0) + (ta?.ca2_score || 0) || ''}</td>
                             <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{ta?.exam_score || ''}</td>
                             <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{ta?.total || ''}</td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{ta?.total ? ta.total.toFixed(1) : ''}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{ta?.class_average !== undefined && ta?.class_average !== null ? Number(ta.class_average).toFixed(1) : ''}</td>
                             <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{ta?.position ? ordinal(ta.position) : ''}</td>
                             <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: ta ? getGradeColor(ta.grade) : '#374151' }}>{ta?.grade || ''}</td>
                             
@@ -415,23 +426,23 @@ function ReportCardContent() {
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{(t2?.ca1_score || 0) + (t2?.ca2_score || 0) || ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{t2?.exam_score || ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{t2?.total || ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{t2?.total ? t2.total.toFixed(1) : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{t2?.class_average !== undefined && t2?.class_average !== null ? Number(t2.class_average).toFixed(1) : ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{t2?.position ? ordinal(t2.position) : ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t2 ? getGradeColor(t2.grade) : '#374151' }}>{t2?.grade || ''}</td>
-                                {/* Cum 1+2 */}
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 2 && (t1 || t2)) ? cum12Total : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 2 && (t1 || t2)) ? cum12Ave.toFixed(1) : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: (termParam >= 2 && (t1 || t2)) ? getGradeColor(t1?.grade || t2?.grade) : '#374151' }}>{(termParam >= 2 && (t1 || t2)) ? (t1?.grade || t2?.grade) : ''}</td>
+                                {/* Cum 1+2 - Using student's average in 'Total' column as requested */}
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 2 && (t1 || t2)) ? row.cum12Ave : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 2 && (t1 || t2)) ? row.class12Ave : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: (termParam >= 2 && (t1 || t2)) ? getGradeColor(row.cum12Grade) : '#374151' }}>{(termParam >= 2 && (t1 || t2)) ? row.cum12Grade : ''}</td>
                                 {/* 3rd Term */}
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{(t3?.ca1_score || 0) + (t3?.ca2_score || 0) || ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{t3?.exam_score || ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{t3?.total || ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{t3?.total ? t3.total.toFixed(1) : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{t3?.class_average !== undefined && t3?.class_average !== null ? Number(t3.class_average).toFixed(1) : ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{t3?.position ? ordinal(t3.position) : ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t3 ? getGradeColor(t3.grade) : '#374151' }}>{t3?.grade || ''}</td>
-                                {/* Final Cumulative */}
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 3 && hasData) ? row.cumTotal : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 3 && hasData) ? row.cumAve : ''}</td>
+                                {/* Final Cumulative - Using student's average in 'Total' column as requested */}
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 3 && hasData) ? row.cumAve : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 3 && hasData) ? row.classFinalAve : ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: (termParam >= 3 && hasData) ? getGradeColor(row.cumGrade) : '#374151' }}>{(termParam >= 3 && hasData) ? row.cumGrade : ''}</td>
                               </>
                             )}
@@ -464,6 +475,81 @@ function ReportCardContent() {
                   </table>
                 </div>
 
+                {/* Traits and Attendance Section */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                  {/* Behavioural Assessment */}
+                  <div style={{ border: '1.5px solid #dc2626' }}>
+                    <div style={{ background: '#fee2e2', padding: '2px', textAlign: 'center', fontWeight: 'bold', fontSize: '8px', borderBottom: '1.5px solid #dc2626', color: '#991b1b' }}>
+                      BEHAVIOURAL ASSESSMENT
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '7px' }}>
+                      <thead>
+                        <tr style={{ background: '#fff7f7' }}>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px 3px', textAlign: 'left' }}>TRAIT</th>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px', width: '25px' }}>1st</th>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px', width: '25px' }}>2nd</th>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px', width: '25px' }}>3rd</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { key: 'punctuality', label: 'Punctuality' },
+                          { key: 'neatness', label: 'Neatness' },
+                          { key: 'politeness', label: 'Politeness' },
+                          { key: 'honesty', label: 'Honesty' },
+                          { key: 'cooperation', label: 'Cooperation' },
+                          { key: 'leadership', label: 'Leadership' },
+                          { key: 'attentiveness', label: 'Attentiveness' }
+                        ].map(t => (
+                          <tr key={t.key}>
+                            <td style={{ border: '1px solid #fca5a5', padding: '1px 3px' }}>{t.label}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{traits[1]?.[t.key] || '-'}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{traits[2]?.[t.key] || '-'}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{traits[3]?.[t.key] || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Attendance Section */}
+                  <div style={{ border: '1.5px solid #dc2626' }}>
+                    <div style={{ background: '#fee2e2', padding: '2px', textAlign: 'center', fontWeight: 'bold', fontSize: '8px', borderBottom: '1.5px solid #dc2626', color: '#991b1b' }}>
+                      ATTENDANCE RECORD
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '7px' }}>
+                      <thead>
+                        <tr style={{ background: '#fff7f7' }}>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px 3px', textAlign: 'left' }}>TERM</th>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px' }}>Present</th>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px' }}>Absent</th>
+                          <th style={{ border: '1px solid #fca5a5', padding: '1px' }}>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[1, 2, 3].map(t => (
+                          <tr key={t}>
+                            <td style={{ border: '1px solid #fca5a5', padding: '1px 3px', fontWeight: 'bold' }}>{ordinal(t)} Term</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center' }}>{attendance[t]?.days_present || '0'}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center' }}>{attendance[t]?.days_absent || '0'}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{attendance[t]?.total_days || '0'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div style={{ padding: '4px', fontSize: '6.5px', color: '#4b5563', borderTop: '1px solid #fca5a5', background: '#fef9f9' }}>
+                      <div style={{ fontWeight: 'bold', marginBottom: '2px', textDecoration: 'underline' }}>TRAIT RATING KEY:</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px' }}>
+                        <div>5 - Excellent</div>
+                        <div>4 - Very Good</div>
+                        <div>3 - Good</div>
+                        <div>2 - Fair</div>
+                        <div>1 - Poor</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Grading Scale */}
                 <div style={{ fontSize: '6.5px', textAlign: 'center', color: '#374151', marginBottom: '3px', lineHeight: 1.5, border: '1px solid #fee2e2', padding: '2px', background: '#fef9f9' }}>
                   <strong>95-100 = A+ (Distinction), 90-94 = A (Super Performance), 87-89 = B+ (Very High), 83-86 = B (High),</strong><br />
@@ -472,8 +558,8 @@ function ReportCardContent() {
                 </div>
 
                 {/* Comments Section */}
-                <div style={{ display: 'grid', gridTemplateColumns: format === 'single' ? '1fr' : termParam === 1 ? '1fr' : termParam === 2 ? '1fr 1fr' : '1fr 1fr 1fr', gap: '3px', marginBottom: '3px' }}>
-                  {[1, 2, 3].filter(t => format === 'cumulative' ? t <= termParam : t === termParam).map(term => (
+                <div style={{ display: 'grid', gridTemplateColumns: format === 'single' ? '1fr' : 'repeat(3, 1fr)', gap: '3px', marginBottom: '3px' }}>
+                    {(format === 'cumulative' ? [1, 2, 3] : [termParam]).map(term => (
                     <div key={term} style={{ border: '1.5px solid #dc2626', padding: '4px', fontSize: '7.5px' }}>
                       <div style={{ fontWeight: 'bold', color: '#1e40af', marginBottom: '2px', fontSize: '7px', borderBottom: '1px solid #fca5a5', paddingBottom: '1px' }}>
                         Class Teacher's Comment:
@@ -492,14 +578,46 @@ function ReportCardContent() {
                       )}
                       <div style={{ marginTop: '3px', fontSize: '6.5px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>Signature ___________</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span>Signature:</span>
+                            {comments[term]?.class_teacher_signature ? (
+                              <img 
+                                src={comments[term].class_teacher_signature} 
+                                alt="Signature" 
+                                style={{ height: '30px', maxWidth: '60px', objectContain: 'contain' }}
+                              />
+                            ) : (
+                              <span>___________</span>
+                            )}
+                          </div>
                           {editComments ? (
-                            <input type="text" placeholder="Date" value={comments[term]?.class_teacher_date || ''} onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], class_teacher_date: e.target.value } }))} style={{ width: '60px', fontSize: '6px', border: '1px solid #ccc' }} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                              <label style={{ background: '#3b82f6', color: 'white', padding: '1px 3px', borderRadius: '2px', fontSize: '5px', cursor: 'pointer' }}>
+                                Upload
+                                <input 
+                                  type="file" 
+                                  accept="image/*" 
+                                  className="hidden" 
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const reader = new FileReader();
+                                      reader.onload = (evt) => {
+                                        const base64 = evt.target?.result as string;
+                                        setComments(prev => ({ ...prev, [term]: { ...prev[term], class_teacher_signature: base64 } }));
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }} 
+                                />
+                              </label>
+                              <input type="text" placeholder="Date" value={comments[term]?.class_teacher_date || ''} onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], class_teacher_date: e.target.value } }))} style={{ width: '45px', fontSize: '6px', border: '1px solid #ccc' }} />
+                            </div>
                           ) : (
                             <span>Date: {comments[term]?.class_teacher_date || ''}</span>
                           )}
                         </div>
-                        <div style={{ fontWeight: 'bold', textDecoration: 'underline' }}>{classTeacher?.name || '—'}</div>
+                        {/*<div style={{ fontWeight: 'bold', textDecoration: 'underline' }}>{classTeacher?.name || '—'}</div>*/}
                       </div>
                       <div style={{ marginTop: '4px', fontWeight: 'bold', color: '#1e40af', fontSize: '7px', borderTop: '1px solid #fca5a5', paddingTop: '2px', marginBottom: '2px' }}>
                         Coordinator's Remarks:
@@ -508,18 +626,60 @@ function ReportCardContent() {
                         <textarea
                           value={comments[term]?.coordinator_remark || ''}
                           onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], coordinator_remark: e.target.value } }))}
-                          style={{ width: '100%', fontSize: '7px', border: '1px solid #ccc', padding: '2px', minHeight: '28px', resize: 'none' }}
-                          placeholder="Coordinator remark..."
+                          readOnly={user?.role === 'teacher'}
+                          style={{ width: '100%', fontSize: '7px', border: '1px solid #ccc', padding: '2px', minHeight: '28px', resize: 'none', opacity: user?.role === 'teacher' ? 0.7 : 1 }}
+                          placeholder={user?.role === 'teacher' ? 'Admin only' : 'Coordinator remark...'}
                         />
                       ) : (
                         <div style={{ fontSize: '7.5px', color: '#374151', minHeight: '28px', lineHeight: 1.4 }}>
                           {comments[term]?.coordinator_remark || ''}
                         </div>
                       )}
-                      <div style={{ marginTop: '2px', fontSize: '6.5px', display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Signature ___________</span>
+                      <div style={{ marginTop: '2px', fontSize: '6.5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>Signature:</span>
+                          {comments[term]?.coordinator_signature ? (
+                            <img 
+                              src={comments[term].coordinator_signature} 
+                              alt="Signature" 
+                              style={{ height: '30px', maxWidth: '90px', objectContain: 'contain' }}
+                            />
+                          ) : (
+                            <span>___________</span>
+                          )}
+                        </div>
                         {editComments ? (
-                          <input type="text" placeholder="Date" value={comments[term]?.coordinator_date || ''} onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], coordinator_date: e.target.value } }))} style={{ width: '60px', fontSize: '6px', border: '1px solid #ccc' }} />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                            {user?.role !== 'teacher' && (
+                              <label style={{ background: '#3b82f6', color: 'white', padding: '1px 3px', borderRadius: '2px', fontSize: '5px', cursor: 'pointer' }}>
+                                Upload
+                                <input 
+                                  type="file" 
+                                  accept="image/*" 
+                                  className="hidden" 
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const reader = new FileReader();
+                                      reader.onload = (evt) => {
+                                        const base64 = evt.target?.result as string;
+                                        setComments(prev => ({ ...prev, [term]: { ...prev[term], coordinator_signature: base64 } }));
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }} 
+                                />
+                              </label>
+                            )}
+                            <input 
+                              type="text" 
+                              placeholder="Date" 
+                              value={comments[term]?.coordinator_date || ''} 
+                              onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], coordinator_date: e.target.value } }))} 
+                              readOnly={user?.role === 'teacher'}
+                              style={{ width: '45px', fontSize: '6px', border: '1px solid #ccc', opacity: user?.role === 'teacher' ? 0.7 : 1 }} 
+                            />
+                          </div>
                         ) : (
                           <span>Date: {comments[term]?.coordinator_date || ''}</span>
                         )}

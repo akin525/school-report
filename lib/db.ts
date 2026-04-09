@@ -33,6 +33,15 @@ function initializeSchema(db: Database.Database) {
       website TEXT,
       logo_url TEXT,
       motto TEXT,
+      nursery_max_ca1 REAL DEFAULT 20,
+      nursery_max_ca2 REAL DEFAULT 20,
+      nursery_max_exam REAL DEFAULT 60,
+      primary_max_ca1 REAL DEFAULT 20,
+      primary_max_ca2 REAL DEFAULT 20,
+      primary_max_exam REAL DEFAULT 60,
+      secondary_max_ca1 REAL DEFAULT 20,
+      secondary_max_ca2 REAL DEFAULT 20,
+      secondary_max_exam REAL DEFAULT 60,
       max_ca1 REAL DEFAULT 20,
       max_ca2 REAL DEFAULT 20,
       max_exam REAL DEFAULT 60,
@@ -201,6 +210,19 @@ function initializeSchema(db: Database.Database) {
       FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
       FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
       UNIQUE(student_id, session_id, term)
+    );
+
+    -- Grading System (per school)
+    CREATE TABLE IF NOT EXISTS grading_system (
+      id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL,
+      grade TEXT NOT NULL,
+      min_score REAL NOT NULL,
+      max_score REAL NOT NULL,
+      remark TEXT,
+      color TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
     );
 
     -- Physical Development

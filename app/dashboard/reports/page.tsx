@@ -1,8 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [schoolId, setSchoolId] = useState('');
   const [user, setUser] = useState<any>(null);
   const [teacher, setTeacher] = useState<any>(null);
@@ -20,6 +22,10 @@ export default function ReportsPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('type') === 'broadsheet') setReportType('broadsheet');
     fetch('/api/auth/me').then(r => r.json()).then(d => {
+      if (d.error || !d.user) {
+        router.push('/login');
+        return;
+      }
       const sid = d.user.school_id;
       setSchoolId(sid);
       setUser(d.user);
@@ -46,8 +52,10 @@ export default function ReportsPage() {
         const curr = sess.find((s: any) => s.is_current) || sess[0];
         if (curr) setSelectedSession(curr.id);
       });
+    }).catch(() => {
+      router.push('/login');
     });
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (selectedClass && schoolId) {
@@ -65,13 +73,31 @@ export default function ReportsPage() {
       </div>
 
       {/* Report Type Tabs */}
-      <div className="flex gap-2">
-        {[{ id: 'individual', label: '📋 Individual Report Card', icon: '👤' }, { id: 'broadsheet', label: '📊 Class Broadsheet', icon: '📊' }].map(t => (
-          <button key={t.id} onClick={() => setReportType(t.id as any)}
-            className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${reportType === t.id ? 'bg-blue-700 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
-            {t.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap justify-between items-center gap-4">
+        <div className="flex gap-2">
+          {[{ id: 'individual', label: '📋 Individual Report Card', icon: '👤' }, 
+            { id: 'broadsheet', label: '📊 Class Broadsheet', icon: '📊' }, 
+            { id: 'master', label: '📝 Master Score Sheet', icon: '📝', hide: !classes.some(c => c.category === 'secondary') }
+          ].filter(t => !t.hide).map(t => (
+            <button key={t.id} onClick={() => {
+              if (t.id === 'master') {
+                router.push('/dashboard/reports/master-sheet');
+              } else {
+                setReportType(t.id as any);
+              }
+            }}
+              className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${reportType === t.id ? 'bg-blue-700 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        
+        <Link 
+          href="/dashboard/reports/comments" 
+          className="px-5 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-all flex items-center shadow-md"
+        >
+          <span className="mr-2">✍️</span> Batch Manage Comments
+        </Link>
       </div>
 
       {/* Filters */}
@@ -88,7 +114,9 @@ export default function ReportsPage() {
             <label className="label">Class</label>
             <select className="input" value={selectedClass} onChange={e => setSelectedClass(e.target.value)}>
               <option value="">Select class</option>
-              {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
+              {classes
+                .filter(c => reportType !== 'master' || c.category === 'secondary')
+                .map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
             </select>
           </div>
           <div>
@@ -174,6 +202,8 @@ export default function ReportsPage() {
           )}
         </div>
       )}
+
+
     </div>
   );
 }

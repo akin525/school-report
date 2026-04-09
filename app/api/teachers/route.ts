@@ -64,6 +64,14 @@ export async function DELETE(req: NextRequest) {
 
   const { id } = await req.json();
   const db = getDb();
+  
+  // Get associated user ID first
+  const teacher = db.prepare('SELECT user_id FROM teachers WHERE id=?').get(id) as any;
+  
+  if (teacher?.user_id) {
+    db.prepare('DELETE FROM users WHERE id=?').run(teacher.user_id);
+  }
+  
   db.prepare('DELETE FROM teachers WHERE id=?').run(id);
   return NextResponse.json({ success: true });
 }

@@ -8,15 +8,9 @@ function ordinal(n: number): string {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-function getGradeColor(grade: string): string {
-  if (grade === 'A+') return '#166534';
-  if (grade === 'A') return '#15803d';
-  if (grade === 'B+' || grade === 'B') return '#1d4ed8';
-  if (grade === 'B-' || grade === 'C+') return '#0e7490';
-  if (grade === 'C' || grade === 'C-') return '#b45309';
-  if (grade === 'D+' || grade === 'D' || grade === 'D-') return '#c2410c';
-  if (grade === 'F') return '#991b1b';
-  return '#374151';
+function getGradeColor(grade: string, gradingSystem: any[]): string {
+  const match = gradingSystem.find(g => g.grade === grade);
+  return match?.color || '#374151';
 }
 
 function BroadsheetContent() {
@@ -115,8 +109,8 @@ function BroadsheetContent() {
                           <td key={s.id} style={{ padding: '3px 2px', border: '1px solid #e5e7eb', textAlign: 'center' }}>
                             {sc ? (
                               <div>
-                                <div style={{ fontWeight: 'bold', color: getGradeColor(sc.grade) }}>{sc.total}</div>
-                                <div style={{ fontSize: '6px', color: getGradeColor(sc.grade) }}>{sc.grade}</div>
+                                <div style={{ fontWeight: 'bold', color: getGradeColor(sc.grade, data.grading) }}>{sc.total}</div>
+                                <div style={{ fontSize: '6px', color: getGradeColor(sc.grade, data.grading) }}>{sc.grade}</div>
                               </div>
                             ) : <span style={{ color: '#d1d5db' }}>—</span>}
                           </td>
@@ -177,8 +171,12 @@ function BroadsheetContent() {
 
             {/* Grade Scale */}
             <div style={{ marginTop: '8px', fontSize: '7px', textAlign: 'center', color: '#374151', border: '1px solid #fca5a5', padding: '4px', background: '#fef9f9' }}>
-              <strong>95-100 = A+ (Distinction) | 90-94 = A (Super Performance) | 87-89 = B+ (Very High) | 83-86 = B (High) | 80-82 = B- (Good) | 77-79 = C+ (High Credit)</strong><br />
-              73-76 = C (Credit) | 70-72 = C- (Average) | 67-69 = D+ (Good Pass) | 63-66 = D (Very Good Pass) | 60-62 = D- (Good Pass) | Below 59 = F (Fail)
+              {data.grading?.map((g: any, idx: number) => (
+                <span key={g.id}>
+                  <strong>{g.min_score}-{g.max_score} = {g.grade} ({g.remark})</strong>
+                  {idx < data.grading.length - 1 ? ' | ' : ''}
+                </span>
+              ))}
             </div>
           </div>
         </div>

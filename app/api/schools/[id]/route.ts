@@ -21,12 +21,26 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const { name, address, phone, email, website, logo_url, motto, max_ca1, max_ca2, max_exam } = await req.json();
+  const { 
+    name, address, phone, email, website, logo_url, motto, 
+    nursery_max_ca1, nursery_max_ca2, nursery_max_exam,
+    primary_max_ca1, primary_max_ca2, primary_max_exam,
+    secondary_max_ca1, secondary_max_ca2, secondary_max_exam 
+  } = await req.json();
   const db = getDb();
   db.prepare(`
-    UPDATE schools SET name=?, address=?, phone=?, email=?, website=?, logo_url=?, motto=?, max_ca1=?, max_ca2=?, max_exam=?
+    UPDATE schools SET name=?, address=?, phone=?, email=?, website=?, logo_url=?, motto=?, 
+    nursery_max_ca1=?, nursery_max_ca2=?, nursery_max_exam=?,
+    primary_max_ca1=?, primary_max_ca2=?, primary_max_exam=?,
+    secondary_max_ca1=?, secondary_max_ca2=?, secondary_max_exam=?
     WHERE id=?
-  `).run(name, address, phone, email, website, logo_url, motto, max_ca1 ?? 20, max_ca2 ?? 20, max_exam ?? 60, id);
+  `).run(
+    name, address, phone, email, website, logo_url, motto, 
+    nursery_max_ca1 ?? 20, nursery_max_ca2 ?? 20, nursery_max_exam ?? 60,
+    primary_max_ca1 ?? 20, primary_max_ca2 ?? 20, primary_max_exam ?? 60,
+    secondary_max_ca1 ?? 20, secondary_max_ca2 ?? 20, secondary_max_exam ?? 60, 
+    id
+  );
 
   return NextResponse.json(db.prepare('SELECT * FROM schools WHERE id=?').get(id));
 }

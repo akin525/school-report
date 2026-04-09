@@ -49,37 +49,3 @@ export async function getSession() {
   if (!token) return null;
   return verifyToken(token);
 }
-
-export function getGrade(score: number, maxScore: number = 100): string {
-  const pct = (score / maxScore) * 100;
-  if (pct >= 95) return 'A+';
-  if (pct >= 90) return 'A';
-  if (pct >= 87) return 'B+';
-  if (pct >= 83) return 'B';
-  if (pct >= 80) return 'B-';
-  if (pct >= 77) return 'C+';
-  if (pct >= 73) return 'C';
-  if (pct >= 70) return 'C-';
-  if (pct >= 67) return 'D+';
-  if (pct >= 63) return 'D';
-  if (pct >= 60) return 'D-';
-  return 'F';
-}
-
-export function getGradeLabel(grade: string): string {
-  const labels: Record<string, string> = {
-    'A+': 'Distinction',
-    'A': 'Super Performance',
-    'B+': 'Very High',
-    'B': 'High',
-    'B-': 'Good',
-    'C+': 'High Credit',
-    'C': 'Credit',
-    'C-': 'Average',
-    'D+': 'Good Pass',
-    'D': 'Very Good Pass',
-    'D-': 'Good Pass',
-    'F': 'Fail',
-  };
-  return labels[grade] || '';
-}

@@ -1,7 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function TeachersPage() {
+  const router = useRouter();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
@@ -18,15 +20,24 @@ export default function TeachersPage() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', qualification: '', category: 'secondary', createLogin: false, password: '' });
   const [assignForm, setAssignForm] = useState({ subjectId: '', classId: '', sessionId: '' });
   const [saving, setSaving] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkData, setBulkData] = useState<any[]>([]);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(data => {
-      setUser(data.user);
-      const sid = data.user.school_id;
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      if (d.error || !d.user) {
+        router.push('/login');
+        return;
+      }
+      setUser(d.user);
+      const sid = d.user.school_id;
       setSchoolId(sid);
       loadData(sid);
+    }).catch(() => {
+      router.push('/login');
     });
-  }, []);
+  }, [router]);
 
   const loadData = async (sid: string) => {
     setLoading(true);
@@ -92,6 +103,67 @@ export default function TeachersPage() {
     loadData(schoolId);
   };
 
+  const downloadTemplate = () => {
+    const headers = ['name', 'email', 'phone', 'qualification', 'category', 'create_login', 'password'];
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\nJane Doe,jane@school.com,08012345678,B.Ed,primary,yes,password123";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "teacher_bulk_upload_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleBulkCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n');
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      
+      const data = lines.slice(1).filter(line => line.trim()).map(line => {
+        const values = line.split(',').map(v => v.trim());
+        const obj: any = {};
+        headers.forEach((header, index) => {
+          let val = values[index];
+          if (header === 'create_login') val = (val === 'yes' || val === 'true');
+          obj[header] = val;
+        });
+        return obj;
+      });
+      
+      setBulkData(data);
+      setShowBulkModal(true);
+    };
+    reader.readAsText(file);
+  };
+
+  const processBulkUpload = async () => {
+    setBulkProcessing(true);
+    try {
+      const res = await fetch('/api/teachers/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teachers: bulkData, schoolId })
+      });
+      if (res.ok) {
+        alert('Bulk upload successful!');
+        setShowBulkModal(false);
+        loadData(schoolId);
+      } else {
+        const err = await res.json();
+        alert('Error: ' + err.error);
+      }
+    } catch (e) {
+      alert('Upload failed');
+    }
+    setBulkProcessing(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -100,7 +172,21 @@ export default function TeachersPage() {
           <p className="text-gray-500 text-sm mt-1">{teachers.length} teacher{teachers.length !== 1 ? 's' : ''}</p>
         </div>
         {(user?.role === 'superadmin' || user?.role === 'school_admin') && (
-          <button onClick={() => openModal()} className="btn-primary">+ Add Teacher</button>
+          <div className="flex items-center gap-3">
+            <div className="relative group">
+              <button className="btn-secondary flex items-center gap-2">
+                <span>📁</span> Bulk Upload
+              </button>
+              <div className="absolute right-0 mt-1 w-48 bg-white border rounded-lg shadow-xl hidden group-hover:block z-20">
+                <button onClick={downloadTemplate} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm border-b">Download Template</button>
+                <label className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm block cursor-pointer">
+                  Upload CSV
+                  <input type="file" accept=".csv" className="hidden" onChange={handleBulkCsv} />
+                </label>
+              </div>
+            </div>
+            <button onClick={() => openModal()} className="btn-primary">+ Add Teacher</button>
+          </div>
         )}
       </div>
 
@@ -243,6 +329,51 @@ export default function TeachersPage() {
             </div>
             <div className="px-6 py-4 bg-gray-50 border-t flex justify-end">
               <button onClick={() => setShowAssignModal(false)} className="btn-secondary">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Preview Modal */}
+      {showBulkModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-blue-800 text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-lg">Preview Bulk Upload ({bulkData.length} teachers)</h3>
+              <button onClick={() => setShowBulkModal(false)} className="text-2xl leading-none">×</button>
+            </div>
+            <div className="p-6 overflow-auto flex-1">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="p-2 border text-left">Name</th>
+                    <th className="p-2 border text-left">Email</th>
+                    <th className="p-2 border text-left">Category</th>
+                    <th className="p-2 border text-left">Login?</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bulkData.map((t, idx) => (
+                    <tr key={idx}>
+                      <td className="p-2 border">{t.name}</td>
+                      <td className="p-2 border">{t.email}</td>
+                      <td className="p-2 border">{t.category}</td>
+                      <td className="p-2 border">{t.create_login ? 'Yes' : 'No'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t">
+              <button onClick={() => setShowBulkModal(false)} className="btn-secondary" disabled={bulkProcessing}>Cancel</button>
+              <button onClick={processBulkUpload} disabled={bulkProcessing} className="btn-primary flex items-center gap-2">
+                {bulkProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Processing...
+                  </>
+                ) : 'Confirm and Upload All'}
+              </button>
             </div>
           </div>
         </div>
