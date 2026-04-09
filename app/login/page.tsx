@@ -81,13 +81,13 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
-            <p className="text-xs font-semibold text-blue-800 mb-2">Demo Credentials:</p>
-            <div className="space-y-1 text-xs text-blue-700">
-              <p><span className="font-medium">Super Admin:</span> superadmin@system.com / admin123</p>
-              <p><span className="font-medium">School Admin:</span> admin@hallmarkschools.ng / admin123</p>
-            </div>
-          </div>
+          {/*<div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100">*/}
+          {/*  <p className="text-xs font-semibold text-blue-800 mb-2">Demo Credentials:</p>*/}
+          {/*  <div className="space-y-1 text-xs text-blue-700">*/}
+          {/*    <p><span className="font-medium">Super Admin:</span> superadmin@system.com / admin123</p>*/}
+          {/*    <p><span className="font-medium">School Admin:</span> admin@hallmarkschools.ng / admin123</p>*/}
+          {/*  </div>*/}
+          {/*</div>*/}
         </div>
 
         <p className="text-center text-blue-300 text-xs mt-6">
