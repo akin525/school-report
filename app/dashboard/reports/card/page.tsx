@@ -26,6 +26,7 @@ function ReportCardContent() {
   const termParam = parseInt(searchParams.get('term') || '3');
   const format = searchParams.get('format') || 'cumulative';
   const [report, setReport] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editComments, setEditComments] = useState(false);
   const [comments, setComments] = useState<Record<number, any>>({});
@@ -37,6 +38,7 @@ function ReportCardContent() {
   useEffect(() => {
     if (studentId && sessionId) {
       fetch(`/api/auth/me`).then(r => r.json()).then(me => {
+        setUser(me.user);
         fetch(`/api/reports/student?studentId=${studentId}&sessionId=${sessionId}&schoolId=${me.user.school_id}`)
           .then(r => r.json()).then(data => {
             setReport(data);
@@ -54,8 +56,18 @@ function ReportCardContent() {
     const c = comments[term] || {};
     const a = attendance[term] || {};
     const t = traits[term] || {};
+    
+    // Ensure schoolId is passed
+    const payload = { 
+      studentId, 
+      sessionId, 
+      term, 
+      schoolId: report.school.id, 
+      ...c 
+    };
+
     await Promise.all([
-      fetch('/api/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId, sessionId, term, schoolId: report.school.id, ...c }) }),
+      fetch('/api/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
       fetch('/api/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId, sessionId, term, schoolId: report.school.id, ...a }) }),
       fetch('/api/traits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId, sessionId, term, schoolId: report.school.id, ...t }) }),
     ]);
@@ -300,12 +312,12 @@ function ReportCardContent() {
                 </div>
 
                 {/* Term Overall Scores */}
-                <div style={{ display: 'grid', gridTemplateColumns: format === 'single' ? '1fr' : termParam === 1 ? '1fr' : termParam === 2 ? '1fr 1fr' : '1fr 1fr 1fr', gap: '3px', marginBottom: '3px' }}>
-                  {[1,2,3].filter(t => format === 'cumulative' ? t <= termParam : t === termParam).map(term => (
+                <div style={{ display: 'grid', gridTemplateColumns: format === 'single' ? '1fr' : 'repeat(3, 1fr)', gap: '3px', marginBottom: '3px' }}>
+                  {(format === 'cumulative' ? [1, 2, 3] : [termParam]).map(term => (
                     <div key={term} style={{ border: '1.5px solid #dc2626', textAlign: 'center', padding: '2px', background: termData[term]?.overallPercentage ? '#eff6ff' : '#f9fafb' }}>
                       <div style={{ fontWeight: 'bold', fontSize: '7px', color: '#1e40af' }}>{ordinal(term)} TERM OVERALL SCORE:</div>
-                      <div style={{ fontWeight: 'bold', fontSize: '14px', color: termData[term]?.overallPercentage >= 70 ? '#166534' : '#dc2626' }}>
-                        {termData[term]?.overallPercentage || ''}%
+                      <div style={{ fontWeight: 'bold', fontSize: '14px', color: (termData[term]?.overallPercentage || 0) >= 70 ? '#166534' : '#dc2626' }}>
+                        {termData[term]?.overallPercentage ?? ''}%
                       </div>
                     </div>
                   ))}
@@ -473,8 +485,8 @@ function ReportCardContent() {
                 </div>
 
                 {/* Comments Section */}
-                <div style={{ display: 'grid', gridTemplateColumns: format === 'single' ? '1fr' : termParam === 1 ? '1fr' : termParam === 2 ? '1fr 1fr' : '1fr 1fr 1fr', gap: '3px', marginBottom: '3px' }}>
-                  {[1, 2, 3].filter(t => format === 'cumulative' ? t <= termParam : t === termParam).map(term => (
+                <div style={{ display: 'grid', gridTemplateColumns: format === 'single' ? '1fr' : 'repeat(3, 1fr)', gap: '3px', marginBottom: '3px' }}>
+                    {(format === 'cumulative' ? [1, 2, 3] : [termParam]).map(term => (
                     <div key={term} style={{ border: '1.5px solid #dc2626', padding: '4px', fontSize: '7.5px' }}>
                       <div style={{ fontWeight: 'bold', color: '#1e40af', marginBottom: '2px', fontSize: '7px', borderBottom: '1px solid #fca5a5', paddingBottom: '1px' }}>
                         Class Teacher's Comment:
@@ -493,14 +505,46 @@ function ReportCardContent() {
                       )}
                       <div style={{ marginTop: '3px', fontSize: '6.5px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>Signature ___________</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span>Signature:</span>
+                            {comments[term]?.class_teacher_signature ? (
+                              <img 
+                                src={comments[term].class_teacher_signature} 
+                                alt="Signature" 
+                                style={{ height: '30px', maxWidth: '60px', objectContain: 'contain' }}
+                              />
+                            ) : (
+                              <span>___________</span>
+                            )}
+                          </div>
                           {editComments ? (
-                            <input type="text" placeholder="Date" value={comments[term]?.class_teacher_date || ''} onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], class_teacher_date: e.target.value } }))} style={{ width: '60px', fontSize: '6px', border: '1px solid #ccc' }} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                              <label style={{ background: '#3b82f6', color: 'white', padding: '1px 3px', borderRadius: '2px', fontSize: '5px', cursor: 'pointer' }}>
+                                Upload
+                                <input 
+                                  type="file" 
+                                  accept="image/*" 
+                                  className="hidden" 
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const reader = new FileReader();
+                                      reader.onload = (evt) => {
+                                        const base64 = evt.target?.result as string;
+                                        setComments(prev => ({ ...prev, [term]: { ...prev[term], class_teacher_signature: base64 } }));
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }} 
+                                />
+                              </label>
+                              <input type="text" placeholder="Date" value={comments[term]?.class_teacher_date || ''} onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], class_teacher_date: e.target.value } }))} style={{ width: '45px', fontSize: '6px', border: '1px solid #ccc' }} />
+                            </div>
                           ) : (
                             <span>Date: {comments[term]?.class_teacher_date || ''}</span>
                           )}
                         </div>
-                        <div style={{ fontWeight: 'bold', textDecoration: 'underline' }}>{classTeacher?.name || '—'}</div>
+                        {/*<div style={{ fontWeight: 'bold', textDecoration: 'underline' }}>{classTeacher?.name || '—'}</div>*/}
                       </div>
                       <div style={{ marginTop: '4px', fontWeight: 'bold', color: '#1e40af', fontSize: '7px', borderTop: '1px solid #fca5a5', paddingTop: '2px', marginBottom: '2px' }}>
                         Coordinator's Remarks:
@@ -509,18 +553,60 @@ function ReportCardContent() {
                         <textarea
                           value={comments[term]?.coordinator_remark || ''}
                           onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], coordinator_remark: e.target.value } }))}
-                          style={{ width: '100%', fontSize: '7px', border: '1px solid #ccc', padding: '2px', minHeight: '28px', resize: 'none' }}
-                          placeholder="Coordinator remark..."
+                          readOnly={user?.role === 'teacher'}
+                          style={{ width: '100%', fontSize: '7px', border: '1px solid #ccc', padding: '2px', minHeight: '28px', resize: 'none', opacity: user?.role === 'teacher' ? 0.7 : 1 }}
+                          placeholder={user?.role === 'teacher' ? 'Admin only' : 'Coordinator remark...'}
                         />
                       ) : (
                         <div style={{ fontSize: '7.5px', color: '#374151', minHeight: '28px', lineHeight: 1.4 }}>
                           {comments[term]?.coordinator_remark || ''}
                         </div>
                       )}
-                      <div style={{ marginTop: '2px', fontSize: '6.5px', display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Signature ___________</span>
+                      <div style={{ marginTop: '2px', fontSize: '6.5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>Signature:</span>
+                          {comments[term]?.coordinator_signature ? (
+                            <img 
+                              src={comments[term].coordinator_signature} 
+                              alt="Signature" 
+                              style={{ height: '30px', maxWidth: '90px', objectContain: 'contain' }}
+                            />
+                          ) : (
+                            <span>___________</span>
+                          )}
+                        </div>
                         {editComments ? (
-                          <input type="text" placeholder="Date" value={comments[term]?.coordinator_date || ''} onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], coordinator_date: e.target.value } }))} style={{ width: '60px', fontSize: '6px', border: '1px solid #ccc' }} />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                            {user?.role !== 'teacher' && (
+                              <label style={{ background: '#3b82f6', color: 'white', padding: '1px 3px', borderRadius: '2px', fontSize: '5px', cursor: 'pointer' }}>
+                                Upload
+                                <input 
+                                  type="file" 
+                                  accept="image/*" 
+                                  className="hidden" 
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const reader = new FileReader();
+                                      reader.onload = (evt) => {
+                                        const base64 = evt.target?.result as string;
+                                        setComments(prev => ({ ...prev, [term]: { ...prev[term], coordinator_signature: base64 } }));
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }} 
+                                />
+                              </label>
+                            )}
+                            <input 
+                              type="text" 
+                              placeholder="Date" 
+                              value={comments[term]?.coordinator_date || ''} 
+                              onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], coordinator_date: e.target.value } }))} 
+                              readOnly={user?.role === 'teacher'}
+                              style={{ width: '45px', fontSize: '6px', border: '1px solid #ccc', opacity: user?.role === 'teacher' ? 0.7 : 1 }} 
+                            />
+                          </div>
                         ) : (
                           <span>Date: {comments[term]?.coordinator_date || ''}</span>
                         )}

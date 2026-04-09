@@ -73,13 +73,22 @@ export default function ReportsPage() {
       </div>
 
       {/* Report Type Tabs */}
-      <div className="flex gap-2">
-        {[{ id: 'individual', label: '📋 Individual Report Card', icon: '👤' }, { id: 'broadsheet', label: '📊 Class Broadsheet', icon: '📊' }].map(t => (
-          <button key={t.id} onClick={() => setReportType(t.id as any)}
-            className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${reportType === t.id ? 'bg-blue-700 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
-            {t.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap justify-between items-center gap-4">
+        <div className="flex gap-2">
+          {[{ id: 'individual', label: '📋 Individual Report Card', icon: '👤' }, { id: 'broadsheet', label: '📊 Class Broadsheet', icon: '📊' }].map(t => (
+            <button key={t.id} onClick={() => setReportType(t.id as any)}
+              className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${reportType === t.id ? 'bg-blue-700 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        
+        <Link 
+          href="/dashboard/reports/comments" 
+          className="px-5 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-all flex items-center shadow-md"
+        >
+          <span className="mr-2">✍️</span> Batch Manage Comments
+        </Link>
       </div>
 
       {/* Filters */}
