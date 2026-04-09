@@ -158,10 +158,19 @@ export async function GET(req: NextRequest) {
     const t2 = termData[2]?.scores.find((s: any) => s.subject_id === sub.id);
     const t3 = termData[3]?.scores.find((s: any) => s.subject_id === sub.id);
 
-    const validTerms = [t1, t2, t3].filter(t => t && t.total > 0);
-    const cumTotal = validTerms.reduce((sum, t) => sum + (t?.total || 0), 0);
-    const cumAve = validTerms.length > 0 ? cumTotal / validTerms.length : 0;
-    const cumGrade = cumAve > 0 ? calculateGrade(cumAve, 100, grading).grade : '';
+    // Cumulative 1&2
+    const validTerms12 = [t1, t2].filter(t => t && t.total > 0);
+    const cum12Total = validTerms12.reduce((sum, t) => sum + (t?.total || 0), 0);
+    const cum12Ave = validTerms12.length > 0 ? cum12Total / validTerms12.length : 0;
+    const cum12Grade = cum12Ave > 0 ? calculateGrade(cum12Ave, 100, grading).grade : '';
+    const class12Ave = validTerms12.length > 0 ? validTerms12.reduce((sum, t) => sum + (t?.class_average || 0), 0) / validTerms12.length : 0;
+
+    // Cumulative Final (1-3)
+    const validTermsFinal = [t1, t2, t3].filter(t => t && t.total > 0);
+    const cumFinalTotal = validTermsFinal.reduce((sum, t) => sum + (t?.total || 0), 0);
+    const cumFinalAve = validTermsFinal.length > 0 ? cumFinalTotal / validTermsFinal.length : 0;
+    const cumFinalGrade = cumFinalAve > 0 ? calculateGrade(cumFinalAve, 100, grading).grade : '';
+    const classFinalAve = validTermsFinal.length > 0 ? validTermsFinal.reduce((sum, t) => sum + (t?.class_average || 0), 0) / validTermsFinal.length : 0;
 
     return {
       subjectId: sub.id,
@@ -169,9 +178,14 @@ export async function GET(req: NextRequest) {
       term1: t1 || null,
       term2: t2 || null,
       term3: t3 || null,
-      cumTotal,
-      cumAve: Math.round(cumAve * 10) / 10,
-      cumGrade,
+      cum12Total,
+      cum12Ave: Math.round(cum12Ave * 10) / 10,
+      cum12Grade,
+      class12Ave: Math.round(class12Ave * 10) / 10,
+      cumTotal: cumFinalTotal,
+      cumAve: Math.round(cumFinalAve * 10) / 10,
+      cumGrade: cumFinalGrade,
+      classFinalAve: Math.round(classFinalAve * 10) / 10,
     };
   });
 
