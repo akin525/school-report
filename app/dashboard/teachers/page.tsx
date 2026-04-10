@@ -8,6 +8,7 @@ export default function TeachersPage() {
   const [assignments, setAssignments] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [classSubjects, setClassSubjects] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
   const [schoolId, setSchoolId] = useState('');
@@ -71,6 +72,7 @@ export default function TeachersPage() {
   const openAssignModal = (teacher: any) => {
     setSelectedTeacher(teacher);
     setAssignForm({ subjectId: '', classId: '', sessionId: currentSession });
+    setClassSubjects([]);
     loadAssignments(teacher.id);
     setShowAssignModal(true);
   };
@@ -299,9 +301,14 @@ export default function TeachersPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
             <div className="bg-green-700 text-white px-6 py-4 flex items-center justify-between">
-              <h3 className="font-bold text-lg">Assign Subjects — {selectedTeacher.name}</h3>
-              <button onClick={() => setShowAssignModal(false)} className="text-2xl leading-none">×</button>
+            <div className="flex flex-col">
+              <h3 className="font-bold text-lg leading-tight">Assign Subjects — {selectedTeacher.name}</h3>
+              <span className="text-[10px] uppercase font-bold bg-green-800/50 px-2 py-0.5 rounded w-fit mt-1">
+                {selectedTeacher.category === 'primary' ? '📖 Primary & Nursery' : '🎓 Secondary Only'} Teacher
+              </span>
             </div>
+            <button onClick={() => setShowAssignModal(false)} className="text-2xl leading-none">×</button>
+          </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="label">Session</label>
@@ -310,18 +317,34 @@ export default function TeachersPage() {
                   </select>
                 </div>
                 <div><label className="label">Class</label>
-                  <select className="input" value={assignForm.classId} onChange={e => setAssignForm({...assignForm, classId: e.target.value})}>
+                  <select className="input" value={assignForm.classId} onChange={async (e) => {
+                    const cid = e.target.value;
+                    setAssignForm({...assignForm, classId: cid, subjectId: ''});
+                    if (cid) {
+                      const res = await fetch(`/api/class-subjects?classId=${cid}&schoolId=${schoolId}`);
+                      const cs = await res.json();
+                      const classSubs = subjects.filter(s => cs.some((csub: any) => csub.subject_id === s.id));
+                      setClassSubjects(classSubs);
+                    } else {
+                      setClassSubjects([]);
+                    }
+                  }}>
                     <option value="">Select</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
+                    {classes.filter(c => {
+                      if (selectedTeacher.category === 'primary') return c.category === 'primary' || c.category === 'nursery';
+                      return c.category === 'secondary';
+                    }).map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
                   </select>
                 </div>
                 {selectedTeacher.category === 'secondary' && (
                   <div>
                     <label className="label">Subject (Optional if Class Teacher)</label>
-                    <select className="input" value={assignForm.subjectId} onChange={e => setAssignForm({...assignForm, subjectId: e.target.value})}>
+                    <select className="input" value={assignForm.subjectId} onChange={e => setAssignForm({...assignForm, subjectId: e.target.value})} disabled={!assignForm.classId}>
                       <option value="">Select (Assign as Class Teacher)</option>
-                      {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      {classSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
+                    {!assignForm.classId && <p className="text-[10px] text-gray-400 mt-1">Select a class first</p>}
+                    {assignForm.classId && classSubjects.length === 0 && <p className="text-[10px] text-red-400 mt-1">No subjects assigned to this class. Add them in Classes & Arms first.</p>}
                   </div>
                 )}
               </div>

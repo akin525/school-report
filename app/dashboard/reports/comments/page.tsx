@@ -42,7 +42,16 @@ export default function CommentsManagementPage() {
         fetch(`/api/classes?schoolId=${sid}`).then(r => r.json()),
       ]).then(([sess, cls]) => {
         setSessions(sess);
-        setClasses(cls);
+        
+        // If teacher, filter classes to only those where they are assigned as Class Teacher
+        if (d.user.role === 'teacher' && d.teacher) {
+          fetch(`/api/teachers/assignments?schoolId=${sid}&teacherId=${d.teacher.id}`).then(r => r.json()).then(assigns => {
+            const classIds = assigns.filter((a: any) => a.subject_id === null).map((a: any) => a.class_id);
+            setClasses(cls.filter((c: any) => classIds.includes(c.id)));
+          });
+        } else {
+          setClasses(cls);
+        }
 
         const curr = sess.find((s: any) => s.is_current) || sess[0];
         if (curr) setSelectedSession(curr.id);
