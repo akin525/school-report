@@ -39,6 +39,16 @@ function BroadsheetContent() {
 
   const { school, session, class: classInfo, classTeacher, subjects, broadsheet, classSize } = data;
 
+  const getSchoolName = () => {
+    if (!school || !classInfo) return '';
+    const cat = classInfo.category || 'secondary';
+    if (cat === 'nursery') return school.nursery_name || school.name;
+    if (cat === 'primary') return school.primary_name || school.name;
+    return school.secondary_name || school.name;
+  };
+
+  const schoolName = getSchoolName();
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Toolbar */}
@@ -59,7 +69,7 @@ function BroadsheetContent() {
                 <img src={school.logo_url} alt="Logo" style={{ width: '40px', height: '40px', objectFit: 'contain' }} />
               )}
               <div style={{ textAlign: 'center' }}>
-                <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: '#1e40af', margin: 0 }}>{school?.name}</h1>
+                <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: '#1e40af', margin: 0 }}>{schoolName}</h1>
                 <p style={{ fontSize: '9px', color: '#374151', margin: '2px 0' }}>{school?.address}</p>
                 <p style={{ fontSize: '9px', color: '#374151', margin: '2px 0' }}>Tel: {school?.phone}</p>
               </div>

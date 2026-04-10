@@ -94,6 +94,8 @@ export default function MasterScoreSheetPage() {
   };
 
   const maxVals = getMaxValues();
+  
+  const schoolName = school?.secondary_name || school?.name || 'HALLMARK HEIGHTS COLLEGE';
 
   const handleScoreChange = (studentId: string, field: string, value: string) => {
     const numVal = parseFloat(value) || 0;
@@ -200,7 +202,10 @@ export default function MasterScoreSheetPage() {
           </div>
           <div>
             <label className="label">Subject</label>
-            <select className="input" value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}>
+            <select className="input" value={selectedSubject} onChange={e => {
+              setSelectedSubject(e.target.value);
+              setSelectedTerm('1');
+            }}>
               {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
@@ -220,7 +225,7 @@ export default function MasterScoreSheetPage() {
       ) : data ? (
         <div ref={printRef} className="bg-white shadow-xl mx-auto print:shadow-none print:w-full overflow-hidden border border-gray-200" id="master-sheet">
           <div className="p-4 border-b-2 border-black text-center">
-            <h2 className="text-xl font-black uppercase tracking-widest">{school?.name || 'HALLMARK HEIGHTS COLLEGE'}</h2>
+            <h2 className="text-xl font-black uppercase tracking-widest">{schoolName}</h2>
             <p className="text-xs font-bold uppercase">{school?.address || 'OLAMBE OGUN STATE'}</p>
             <h3 className="mt-2 text-lg font-bold border-y border-black inline-block px-4">MASTER SCORE SHEET</h3>
           </div>

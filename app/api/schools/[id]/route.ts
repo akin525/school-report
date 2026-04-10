@@ -13,36 +13,43 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { id } = await params;
+  try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { id } = await params;
 
-  if (session.role !== 'superadmin' && session.schoolId !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (session.role !== 'superadmin' && session.schoolId !== id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { 
+      name, nursery_name, primary_name, secondary_name, address, phone, email, website, logo_url, motto, 
+      nursery_max_ca1, nursery_max_ca2, nursery_max_exam, nursery_max_weekly,
+      primary_max_ca1, primary_max_ca2, primary_max_exam, primary_max_weekly,
+      secondary_max_ca1, secondary_max_ca2, secondary_max_exam, secondary_max_weekly 
+    } = await req.json();
+    
+    const db = getDb();
+    db.prepare(`
+      UPDATE schools SET 
+        name=?, nursery_name=?, primary_name=?, secondary_name=?, address=?, phone=?, email=?, website=?, logo_url=?, motto=?, 
+        nursery_max_ca1=?, nursery_max_ca2=?, nursery_max_exam=?, nursery_max_weekly=?,
+        primary_max_ca1=?, primary_max_ca2=?, primary_max_exam=?, primary_max_weekly=?,
+        secondary_max_ca1=?, secondary_max_ca2=?, secondary_max_exam=?, secondary_max_weekly=?
+      WHERE id=?
+    `).run(
+      name, nursery_name || '', primary_name || '', secondary_name || '', address || '', phone || '', email || '', website || '', logo_url || '', motto || '', 
+      nursery_max_ca1 ?? 20, nursery_max_ca2 ?? 20, nursery_max_exam ?? 60, nursery_max_weekly ?? 10,
+      primary_max_ca1 ?? 20, primary_max_ca2 ?? 20, primary_max_exam ?? 60, primary_max_weekly ?? 10,
+      secondary_max_ca1 ?? 20, secondary_max_ca2 ?? 20, secondary_max_exam ?? 60, secondary_max_weekly ?? 10,
+      id
+    );
+
+    return NextResponse.json(db.prepare('SELECT * FROM schools WHERE id=?').get(id));
+  } catch (error: any) {
+    console.error('SCHOOL_PUT_ERROR:', error);
+    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
-
-  const { 
-    name, address, phone, email, website, logo_url, motto, 
-    nursery_max_ca1, nursery_max_ca2, nursery_max_exam,
-    primary_max_ca1, primary_max_ca2, primary_max_exam,
-    secondary_max_ca1, secondary_max_ca2, secondary_max_exam 
-  } = await req.json();
-  const db = getDb();
-  db.prepare(`
-    UPDATE schools SET name=?, address=?, phone=?, email=?, website=?, logo_url=?, motto=?, 
-    nursery_max_ca1=?, nursery_max_ca2=?, nursery_max_exam=?,
-    primary_max_ca1=?, primary_max_ca2=?, primary_max_exam=?,
-    secondary_max_ca1=?, secondary_max_ca2=?, secondary_max_exam=?
-    WHERE id=?
-  `).run(
-    name, address, phone, email, website, logo_url, motto, 
-    nursery_max_ca1 ?? 20, nursery_max_ca2 ?? 20, nursery_max_exam ?? 60,
-    primary_max_ca1 ?? 20, primary_max_ca2 ?? 20, primary_max_exam ?? 60,
-    secondary_max_ca1 ?? 20, secondary_max_ca2 ?? 20, secondary_max_exam ?? 60, 
-    id
-  );
-
-  return NextResponse.json(db.prepare('SELECT * FROM schools WHERE id=?').get(id));
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

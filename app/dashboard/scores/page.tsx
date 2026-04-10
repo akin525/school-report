@@ -349,7 +349,10 @@ export default function ScoresPage() {
           {mode === 'subject' && (
             <div>
               <label className="label">Select Subject</label>
-              <select className="input" value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}>
+              <select className="input" value={selectedSubject} onChange={e => {
+                setSelectedSubject(e.target.value);
+                setSelectedTerm('1');
+              }}>
                 <option value="">— Select subject —</option>
                 {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
