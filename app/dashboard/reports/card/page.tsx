@@ -253,7 +253,7 @@ function ReportCardContent() {
               {/* MAIN CONTENT */}
               <div style={{ flex: 1 }}>
                 {/* School Header - Redesigned for better look */}
-                <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px', alignItems: 'center', gap: '10px', marginBottom: '8px', borderBottom: '2px solid #dc2626', pb: '6px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px', alignItems: 'center', gap: '10px', marginBottom: '8px', borderBottom: '2px solid #dc2626', paddingBottom: '6px' }}>
                   {/* Logo */}
                   <div style={{ width: '60px', height: '60px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                     {school.logo_url ? (
