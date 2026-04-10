@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     SELECT id, first_name, middle_name, last_name, admission_number
     FROM students
     WHERE class_id = ? AND school_id = ?
-    ORDER BY first_name, last_name
+    ORDER BY last_name, first_name
   `).all(classId, schoolId) as any[];
 
   // Get scores for the specific subject, class, and term

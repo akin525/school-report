@@ -7,7 +7,7 @@ export default function SettingsPage() {
   const [school, setSchool] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [form, setForm] = useState({ 
-    name: '', address: '', phone: '', email: '', website: '', logo_url: '', motto: '', 
+    name: '', nursery_name: '', primary_name: '', secondary_name: '', address: '', phone: '', email: '', website: '', logo_url: '', motto: '', 
     nursery_max_ca1: 20, nursery_max_ca2: 20, nursery_max_exam: 60, nursery_max_weekly: 10,
     primary_max_ca1: 20, primary_max_ca2: 20, primary_max_exam: 60, primary_max_weekly: 10,
     secondary_max_ca1: 20, secondary_max_ca2: 20, secondary_max_exam: 60, secondary_max_weekly: 10
@@ -78,7 +78,11 @@ export default function SettingsPage() {
       loadGrading(d.user.school_id);
       if (d.school) {
         setForm({
-          name: d.school.name || '', address: d.school.address || '', phone: d.school.phone || '',
+          name: d.school.name || '',
+          nursery_name: d.school.nursery_name || '',
+          primary_name: d.school.primary_name || '',
+          secondary_name: d.school.secondary_name || '',
+          address: d.school.address || '', phone: d.school.phone || '',
           email: d.school.email || '', website: d.school.website || '', logo_url: d.school.logo_url || '', motto: d.school.motto || '',
           nursery_max_ca1: d.school.nursery_max_ca1 ?? 20,
           nursery_max_ca2: d.school.nursery_max_ca2 ?? 20,
@@ -132,9 +136,26 @@ export default function SettingsPage() {
 
   const saveSettings = async () => {
     setSaving(true);
-    const res = await fetch(`/api/schools/${school.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-    if (res.ok) { setMsg('Settings saved successfully!'); setTimeout(() => setMsg(''), 3000); }
-    setSaving(false);
+    setMsg('');
+    try {
+      const res = await fetch(`/api/schools/${school.id}`, { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(form) 
+      });
+      
+      if (res.ok) { 
+        setMsg('Settings saved successfully!'); 
+        setTimeout(() => setMsg(''), 3000); 
+      } else {
+        const err = await res.json();
+        alert('Failed to save: ' + (err.error || 'Unknown error'));
+      }
+    } catch (e) {
+      alert('Network error while saving settings');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!school) return (
@@ -153,8 +174,22 @@ export default function SettingsPage() {
       <div className="card space-y-5">
         <h2 className="text-lg font-bold text-gray-700 border-b pb-3">School Information</h2>
         <div>
-          <label className="label">School Name *</label>
+          <label className="label">School Name (General/Fallback) *</label>
           <input className="input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} disabled={user?.role === 'teacher'} />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className="label text-xs">Nursery Section Name</label>
+            <input className="input text-sm" placeholder="e.g. Hallmark Nursery School" value={form.nursery_name} onChange={e => setForm({...form, nursery_name: e.target.value})} disabled={user?.role === 'teacher'} />
+          </div>
+          <div>
+            <label className="label text-xs">Primary Section Name</label>
+            <input className="input text-sm" placeholder="e.g. Hallmark Primary School" value={form.primary_name} onChange={e => setForm({...form, primary_name: e.target.value})} disabled={user?.role === 'teacher'} />
+          </div>
+          <div>
+            <label className="label text-xs">Secondary Section Name</label>
+            <input className="input text-sm" placeholder="e.g. Hallmark Heights College" value={form.secondary_name} onChange={e => setForm({...form, secondary_name: e.target.value})} disabled={user?.role === 'teacher'} />
+          </div>
         </div>
         <div>
           <label className="label">Address</label>

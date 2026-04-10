@@ -27,6 +27,9 @@ function initializeSchema(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS schools (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      nursery_name TEXT,
+      primary_name TEXT,
+      secondary_name TEXT,
       address TEXT,
       phone TEXT,
       email TEXT,
@@ -76,6 +79,35 @@ function initializeSchema(db: Database.Database) {
       FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
     );
 
+    -- Migration: Add category-specific names and max scores if missing
+  `);
+
+  // Helper to add column if not exists
+  const addColumn = (table: string, col: string, type: string) => {
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+    } catch (e) {
+      // Column likely exists
+    }
+  };
+
+  addColumn('schools', 'nursery_name', 'TEXT');
+  addColumn('schools', 'primary_name', 'TEXT');
+  addColumn('schools', 'secondary_name', 'TEXT');
+  addColumn('schools', 'nursery_max_ca1', 'REAL DEFAULT 20');
+  addColumn('schools', 'nursery_max_ca2', 'REAL DEFAULT 20');
+  addColumn('schools', 'nursery_max_exam', 'REAL DEFAULT 60');
+  addColumn('schools', 'nursery_max_weekly', 'REAL DEFAULT 10');
+  addColumn('schools', 'primary_max_ca1', 'REAL DEFAULT 20');
+  addColumn('schools', 'primary_max_ca2', 'REAL DEFAULT 20');
+  addColumn('schools', 'primary_max_exam', 'REAL DEFAULT 60');
+  addColumn('schools', 'primary_max_weekly', 'REAL DEFAULT 10');
+  addColumn('schools', 'secondary_max_ca1', 'REAL DEFAULT 20');
+  addColumn('schools', 'secondary_max_ca2', 'REAL DEFAULT 20');
+  addColumn('schools', 'secondary_max_exam', 'REAL DEFAULT 60');
+  addColumn('schools', 'secondary_max_weekly', 'REAL DEFAULT 10');
+
+  db.exec(`
     -- Classes / Arms
     CREATE TABLE IF NOT EXISTS classes (
       id TEXT PRIMARY KEY,

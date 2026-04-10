@@ -102,6 +102,16 @@ function ReportCardContent() {
 
   const maxVals = getMaxValues();
 
+  const getSchoolName = () => {
+    if (!school || !student) return '';
+    const cat = student.class_category || 'secondary';
+    if (cat === 'nursery') return school.nursery_name || school.name;
+    if (cat === 'primary') return school.primary_name || school.name;
+    return school.secondary_name || school.name;
+  };
+
+  const schoolName = getSchoolName();
+
   // Determine what term to show in the first columns for single report
   const activeTerm = format === 'single' ? termParam : 1;
   const activeTermLabel = activeTerm === 1 ? '1st TERM' : activeTerm === 2 ? '2nd TERM' : '3rd TERM';
@@ -242,35 +252,48 @@ function ReportCardContent() {
 
               {/* MAIN CONTENT */}
               <div style={{ flex: 1 }}>
-                {/* School Header */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                    {/* Logo */}
-                    <div style={{ width: '50px', height: '50px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
-                      {school.logo_url ? (
-                        <img src={school.logo_url} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                      ) : (
-                        <div style={{ width: '100%', height: '100%', border: '2px solid #1e40af', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eff6ff' }}>
-                          <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#1e40af', textAlign: 'center', lineHeight: 1.1 }}>
-                            {school.name.substring(0, 2).toUpperCase()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e40af', lineHeight: 1, letterSpacing: '-0.5px' }}>{school.name}</div>
-                      <div style={{ fontSize: '8px', color: '#374151', marginTop: '2px' }}>{school.address}</div>
-                      {school.website && <div style={{ fontSize: '8px', color: '#1d4ed8' }}>Website: {school.website} &nbsp; Email: {school.email}</div>}
-                      {school.phone && <div style={{ fontSize: '8px', color: '#374151' }}>Tel: {school.phone}</div>}
-                    </div>
+                {/* School Header - Redesigned for better look */}
+                <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 60px', alignItems: 'center', gap: '10px', marginBottom: '8px', borderBottom: '2px solid #dc2626', pb: '6px' }}>
+                  {/* Logo */}
+                  <div style={{ width: '60px', height: '60px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    {school.logo_url ? (
+                      <img src={school.logo_url} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', border: '2px solid #1e40af', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eff6ff' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e40af', textAlign: 'center', lineHeight: 1.1 }}>
+                          {schoolName.substring(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
                   </div>
+
+                  {/* School Info - Centered and Prominent */}
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '26px', fontWeight: '900', color: '#1e40af', lineHeight: 1, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>
+                      {schoolName}
+                    </div>
+                    <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#374151', textTransform: 'uppercase', marginBottom: '1px' }}>
+                      {school.address}
+                    </div>
+                    <div style={{ fontSize: '8px', color: '#1d4ed8' }}>
+                      {school.website && <span style={{ marginRight: '8px' }}>🌐 {school.website}</span>}
+                      {school.email && <span style={{ marginRight: '8px' }}>✉️ {school.email}</span>}
+                      {school.phone && <span>📞 {school.phone}</span>}
+                    </div>
+                    {school.motto && (
+                      <div style={{ fontSize: '10px', fontStyle: 'italic', fontWeight: 'bold', color: '#dc2626', marginTop: '2px' }}>
+                        Motto: {school.motto}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Student Photo */}
-                  <div style={{ width: '60px', height: '70px', border: '2px solid #dc2626', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb' }}>
+                  <div style={{ width: '65px', height: '75px', border: '2px solid #dc2626', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', borderRadius: '2px' }}>
                     {student.photo_url ? (
                       <img src={student.photo_url} alt="Student" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
                       <div style={{ textAlign: 'center', fontSize: '7px', color: '#9ca3af' }}>
-                        <div style={{ fontSize: '18px' }}>👤</div>
+                        <div style={{ fontSize: '20px' }}>👤</div>
                         <div>PHOTO</div>
                       </div>
                     )}

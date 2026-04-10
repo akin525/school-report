@@ -77,11 +77,22 @@ export default function TeachersPage() {
 
   const saveTeacher = async () => {
     setSaving(true);
-    const method = editing ? 'PUT' : 'POST';
-    const body = editing ? { ...form, id: editing.id, schoolId } : { ...form, schoolId };
-    const res = await fetch('/api/teachers', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (res.ok) { setShowModal(false); loadData(schoolId); }
-    setSaving(false);
+    try {
+      const method = editing ? 'PUT' : 'POST';
+      const body = editing ? { ...form, id: editing.id, schoolId } : { ...form, schoolId };
+      const res = await fetch('/api/teachers', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (res.ok) { 
+        setShowModal(false); 
+        loadData(schoolId); 
+      } else {
+        const err = await res.json();
+        alert('Error: ' + (err.error || 'Failed to save teacher'));
+      }
+    } catch (e) {
+      alert('Network error or server unavailable');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveAssignment = async () => {
@@ -99,8 +110,17 @@ export default function TeachersPage() {
 
   const deleteTeacher = async (id: string) => {
     if (!confirm('Delete this teacher?')) return;
-    await fetch('/api/teachers', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-    loadData(schoolId);
+    try {
+      const res = await fetch('/api/teachers', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      if (res.ok) {
+        loadData(schoolId);
+      } else {
+        const err = await res.json();
+        alert('Error: ' + (err.error || 'Failed to delete teacher'));
+      }
+    } catch (e) {
+      alert('Network error or server unavailable');
+    }
   };
 
   const downloadTemplate = () => {

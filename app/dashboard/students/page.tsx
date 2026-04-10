@@ -97,17 +97,37 @@ export default function StudentsPage() {
 
   const saveStudent = async () => {
     setSaving(true);
-    const method = editing ? 'PUT' : 'POST';
-    const body = editing ? { ...form, id: editing.id, schoolId } : { ...form, schoolId };
-    const res = await fetch('/api/students', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (res.ok) { setShowModal(false); loadData(schoolId); }
-    setSaving(false);
+    try {
+      const method = editing ? 'PUT' : 'POST';
+      const body = editing ? { ...form, id: editing.id, schoolId } : { ...form, schoolId };
+      const res = await fetch('/api/students', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (res.ok) { 
+        setShowModal(false); 
+        loadData(schoolId); 
+      } else {
+        const err = await res.json();
+        alert('Error: ' + (err.error || 'Failed to save student'));
+      }
+    } catch (e) {
+      alert('Network error or server unavailable');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const deleteStudent = async (id: string) => {
     if (!confirm('Delete this student? All their scores will also be deleted.')) return;
-    await fetch('/api/students', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-    loadData(schoolId);
+    try {
+      const res = await fetch('/api/students', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      if (res.ok) {
+        loadData(schoolId);
+      } else {
+        const err = await res.json();
+        alert('Error: ' + (err.error || 'Failed to delete student'));
+      }
+    } catch (e) {
+      alert('Network error or server unavailable');
+    }
   };
 
   const downloadTemplate = () => {
