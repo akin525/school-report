@@ -15,7 +15,7 @@ export default function ScoresPage() {
   const [classes, setClasses] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
-  const [scores, setScores] = useState<Record<string, { ca1: number; ca2: number; exam: number }>>({});
+  const [scores, setScores] = useState<Record<string, any>>({});
   const [selectedSession, setSelectedSession] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('1');
@@ -28,6 +28,7 @@ export default function ScoresPage() {
   const [maxCA1, setMaxCA1] = useState(20);
   const [maxCA2, setMaxCA2] = useState(20);
   const [maxExam, setMaxExam] = useState(60);
+  const [maxWeekly, setMaxWeekly] = useState(10);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkData, setBulkData] = useState<any[]>([]);
   const [bulkProcessing, setBulkProcessing] = useState(false);
@@ -50,6 +51,7 @@ export default function ScoresPage() {
         setMaxCA1(d.school.max_ca1 ?? 20);
         setMaxCA2(d.school.max_ca2 ?? 20);
         setMaxExam(d.school.max_exam ?? 60);
+        setMaxWeekly(d.school.max_weekly ?? 10);
       }
 
       Promise.all([
@@ -85,14 +87,17 @@ export default function ScoresPage() {
         setMaxCA1(school.nursery_max_ca1 ?? 20);
         setMaxCA2(school.nursery_max_ca2 ?? 20);
         setMaxExam(school.nursery_max_exam ?? 60);
+        setMaxWeekly(school.nursery_max_weekly ?? 10);
       } else if (cls?.category === 'primary') {
         setMaxCA1(school.primary_max_ca1 ?? 20);
         setMaxCA2(school.primary_max_ca2 ?? 20);
         setMaxExam(school.primary_max_exam ?? 60);
+        setMaxWeekly(school.primary_max_weekly ?? 10);
       } else {
         setMaxCA1(school.secondary_max_ca1 ?? 20);
         setMaxCA2(school.secondary_max_ca2 ?? 20);
         setMaxExam(school.secondary_max_exam ?? 60);
+        setMaxWeekly(school.secondary_max_weekly ?? 10);
       }
     }
   }, [selectedClass, school, classes]);
@@ -128,21 +133,37 @@ export default function ScoresPage() {
     const scoreRes = await fetch(`/api/scores?classId=${selectedClass}&sessionId=${selectedSession}&term=${selectedTerm}&schoolId=${schoolId}`);
     const scoreData: any[] = await scoreRes.json();
 
-    const scoreMap: Record<string, { ca1: number; ca2: number; exam: number }> = {};
+    const scoreMap: Record<string, any> = {};
     for (const sc of scoreData) {
-      scoreMap[`${sc.student_id}_${sc.subject_id}`] = { ca1: sc.ca1_score, ca2: sc.ca2_score, exam: sc.exam_score };
+      scoreMap[`${sc.student_id}_${sc.subject_id}`] = { 
+        ...sc,
+        ca1: sc.ca1_score, 
+        ca2: sc.ca2_score, 
+        exam: sc.exam_score,
+        // Preserve weekly scores if they exist
+        t1: sc.t1 !== null && sc.t1 !== undefined ? sc.t1 : '',
+        t2: sc.t2 !== null && sc.t2 !== undefined ? sc.t2 : '',
+        t3: sc.t3 !== null && sc.t3 !== undefined ? sc.t3 : '',
+        t4: sc.t4 !== null && sc.t4 !== undefined ? sc.t4 : '',
+        t5: sc.t5 !== null && sc.t5 !== undefined ? sc.t5 : '',
+        t6: sc.t6 !== null && sc.t6 !== undefined ? sc.t6 : '',
+        t7: sc.t7 !== null && sc.t7 !== undefined ? sc.t7 : '',
+        t8: sc.t8 !== null && sc.t8 !== undefined ? sc.t8 : '',
+        t9: sc.t9 !== null && sc.t9 !== undefined ? sc.t9 : '',
+        t10: sc.t10 !== null && sc.t10 !== undefined ? sc.t10 : '',
+      };
     }
     setScores(scoreMap);
     setLoading(false);
-  }, [selectedClass, selectedSession, selectedTerm, schoolId, classes]);
+  }, [selectedClass, selectedSession, selectedTerm, schoolId, user, teacher]);
 
   useEffect(() => {
     if (selectedClass && selectedSession && selectedTerm) loadSubjectsAndScores();
   }, [selectedClass, selectedSession, selectedTerm]);
 
-  const updateScore = (studentId: string, subjectId: string, field: 'ca1' | 'ca2' | 'exam', value: string) => {
+  const updateScore = (studentId: string, subjectId: string, field: string, value: string) => {
     const key = `${studentId}_${subjectId}`;
-    let max = 0;
+    let max = 100;
     if (field === 'exam') max = maxExam;
     else if (field === 'ca1') max = maxCA1;
     else if (field === 'ca2') max = maxCA2;
@@ -150,7 +171,38 @@ export default function ScoresPage() {
     let num = parseFloat(value) || 0;
     if (num < 0) num = 0;
     if (num > max) num = max;
-    setScores(prev => ({ ...prev, [key]: { ...prev[key], ca1: prev[key]?.ca1 ?? 0, ca2: prev[key]?.ca2 ?? 0, exam: prev[key]?.exam ?? 0, [field]: num } }));
+    
+    setScores(prev => {
+      const current = { 
+        ...prev[key], 
+        [field]: value === '' ? '' : num 
+      };
+
+      // Algorithm to distribute CA1/CA2 back to T1-T10 for Secondary classes
+      const cls = classes.find(c => c.id === selectedClass);
+      if (cls?.category === 'secondary' && (field === 'ca1' || field === 'ca2')) {
+        const ca1 = field === 'ca1' ? num : (current.ca1 ?? 0);
+        const ca2 = field === 'ca2' ? num : (current.ca2 ?? 0);
+        const totalCA = ca1 + ca2;
+        const maxCA = maxCA1 + maxCA2;
+        
+        if (maxCA > 0) {
+          const targetWeeklySum = (totalCA / maxCA) * (maxWeekly * 10);
+          let remaining = targetWeeklySum;
+          
+          // Distribute the target sum across 10 weeks as evenly as possible (steps of 0.5)
+          for (let i = 1; i <= 10; i++) {
+            const slotsLeft = 11 - i;
+            let val = Math.round((remaining / slotsLeft) * 2) / 2;
+            if (val > maxWeekly) val = maxWeekly;
+            current[`t${i}`] = val;
+            remaining = parseFloat((remaining - val).toFixed(2));
+          }
+        }
+      }
+
+      return { ...prev, [key]: current };
+    });
   };
 
 
@@ -164,7 +216,17 @@ export default function ScoresPage() {
         const key = `${student.id}_${subject.id}`;
         const sc = scores[key];
         if (sc !== undefined) {
-          scoreList.push({ studentId: student.id, subjectId: subject.id, classId: selectedClass, sessionId: selectedSession, term: parseInt(selectedTerm), ca1_score: sc.ca1 ?? 0, ca2_score: sc.ca2 ?? 0, exam_score: sc.exam ?? 0 });
+          scoreList.push({ 
+            ...sc,
+            studentId: student.id, 
+            subjectId: subject.id, 
+            classId: selectedClass, 
+            sessionId: selectedSession, 
+            term: parseInt(selectedTerm), 
+            ca1_score: sc.ca1 ?? 0, 
+            ca2_score: sc.ca2 ?? 0, 
+            exam_score: sc.exam ?? 0 
+          });
         }
       }
     }
@@ -301,6 +363,14 @@ export default function ScoresPage() {
           <p className="text-gray-500 text-sm mt-1">Enter CA and Exam scores for students</p>
         </div>
         <div className="flex items-center gap-3">
+          {selectedClass && classes.find(c => c.id === selectedClass)?.category === 'secondary' && (
+            <button 
+              onClick={() => router.push('/dashboard/reports/master-sheet')}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all flex items-center shadow-sm"
+            >
+              <span className="mr-2">📝</span> Master Sheet
+            </button>
+          )}
           {selectedClass && selectedSession && (
             <label className="btn-secondary text-sm flex items-center gap-2 cursor-pointer shadow-sm">
               📁 Bulk Result Upload

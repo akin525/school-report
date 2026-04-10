@@ -27,7 +27,7 @@ export default function MasterScoreSheetPage() {
       }
       const sid = d.user.school_id;
       
-      fetch(`/api/schools?id=${sid}`).then(r => r.json()).then(s => setSchool(s));
+      setSchool(d.school);
       fetch(`/api/sessions?schoolId=${sid}`).then(r => r.json()).then(sess => {
         setSessions(sess);
         const curr = sess.find((s: any) => s.is_current) || sess[0];
@@ -62,8 +62,16 @@ export default function MasterScoreSheetPage() {
       d.students.forEach((student: any) => {
         const s = d.scores.find((sc: any) => sc.student_id === student.id) || {};
         scoreMap[student.id] = {
-          t1: s.t1 || 0, t2: s.t2 || 0, t3: s.t3 || 0, t4: s.t4 || 0, t5: s.t5 || 0,
-          t6: s.t6 || 0, t7: s.t7 || 0, t8: s.t8 || 0, t9: s.t9 || 0, t10: s.t10 || 0,
+          t1: s.t1 !== null && s.t1 !== undefined ? s.t1 : '', 
+          t2: s.t2 !== null && s.t2 !== undefined ? s.t2 : '', 
+          t3: s.t3 !== null && s.t3 !== undefined ? s.t3 : '', 
+          t4: s.t4 !== null && s.t4 !== undefined ? s.t4 : '', 
+          t5: s.t5 !== null && s.t5 !== undefined ? s.t5 : '',
+          t6: s.t6 !== null && s.t6 !== undefined ? s.t6 : '', 
+          t7: s.t7 !== null && s.t7 !== undefined ? s.t7 : '', 
+          t8: s.t8 !== null && s.t8 !== undefined ? s.t8 : '', 
+          t9: s.t9 !== null && s.t9 !== undefined ? s.t9 : '', 
+          t10: s.t10 !== null && s.t10 !== undefined ? s.t10 : '',
           ca1_score: s.ca1_score || 0,
           ca2_score: s.ca2_score || 0,
           exam_score: s.exam_score || 0,
@@ -108,13 +116,27 @@ export default function MasterScoreSheetPage() {
     if (field === 'exam_score' && numVal > maxVals.exam) return;
     
     setScores(prev => {
-      const current = { ...prev[studentId], [field]: numVal };
+      // Ensure we don't convert empty string to 0 prematurely to track tests taken
+      const current = { ...prev[studentId], [field]: value === '' ? '' : numVal };
       
-      // If a weekly assessment was changed (T1-T10), split the sum into CA1 and CA2
+      // If a weekly assessment was changed (T1-T10), scale based on ONLY tests taken (Option 2)
       if (field.startsWith('t') && field !== 'total') {
-        const weeklyTotal = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].reduce((sum, i) => sum + (current[`t${i}`] || 0), 0);
-        current.ca1_score = Math.ceil(weeklyTotal / 2);
-        current.ca2_score = Math.floor(weeklyTotal / 2);
+        const testsTaken = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter(i => {
+          const val = current[`t${i}`];
+          return val !== undefined && val !== null && val !== '';
+        });
+        
+        const weeklyTotal = testsTaken.reduce((sum, i) => sum + (parseFloat(current[`t${i}`]) || 0), 0);
+        const maxWeeklyPossible = testsTaken.length * maxVals.weekly;
+        const maxCAPossible = maxVals.ca1 + maxVals.ca2;
+        
+        // Calculate scaled CA score based only on tests actually taken
+        const rawScaledCA = maxWeeklyPossible > 0 ? (weeklyTotal / maxWeeklyPossible) * maxCAPossible : 0;
+        const scaledCA = Math.round(rawScaledCA * 2) / 2; // Round to nearest 0.5
+        
+        // Split into CA1 and CA2
+        current.ca1_score = Math.ceil(scaledCA / 2);
+        current.ca2_score = parseFloat((scaledCA - current.ca1_score).toFixed(1));
       }
       
       // Auto-calculate total: CA1 + CA2 + Exam

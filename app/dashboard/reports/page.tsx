@@ -15,7 +15,7 @@ export default function ReportsPage() {
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('1');
   const [reportFormat, setReportFormat] = useState<'single' | 'cumulative'>('cumulative');
-  const [reportType, setReportType] = useState<'individual' | 'broadsheet' | 'master'>('individual');
+  const [reportType, setReportType] = useState<'individual' | 'broadsheet'>('individual');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -76,16 +76,9 @@ export default function ReportsPage() {
       <div className="flex flex-wrap justify-between items-center gap-4">
         <div className="flex gap-2">
           {[{ id: 'individual', label: '📋 Individual Report Card', icon: '👤' }, 
-            { id: 'broadsheet', label: '📊 Class Broadsheet', icon: '📊' }, 
-            { id: 'master', label: '📝 Master Score Sheet', icon: '📝', hide: !classes.some(c => c.category === 'secondary') }
-          ].filter(t => !t.hide).map(t => (
-            <button key={t.id} onClick={() => {
-              if (t.id === 'master') {
-                router.push('/dashboard/reports/master-sheet');
-              } else {
-                setReportType(t.id as any);
-              }
-            }}
+            { id: 'broadsheet', label: '📊 Class Broadsheet', icon: '📊' }
+          ].map(t => (
+            <button key={t.id} onClick={() => setReportType(t.id as any)}
               className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${reportType === t.id ? 'bg-blue-700 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
               {t.label}
             </button>
@@ -114,9 +107,7 @@ export default function ReportsPage() {
             <label className="label">Class</label>
             <select className="input" value={selectedClass} onChange={e => setSelectedClass(e.target.value)}>
               <option value="">Select class</option>
-              {classes
-                .filter(c => reportType !== 'master' || c.category === 'secondary')
-                .map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
+              {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
             </select>
           </div>
           <div>

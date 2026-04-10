@@ -54,7 +54,16 @@ export async function POST(req: NextRequest) {
       t1=?, t2=?, t3=?, t4=?, t5=?, t6=?, t7=?, t8=?, t9=?, t10=?, 
       updated_at=CURRENT_TIMESTAMP WHERE id=?`)
       .run(ca1_score ?? 0, ca2_score ?? 0, exam_score ?? 0, 
-        t1 ?? 0, t2 ?? 0, t3 ?? 0, t4 ?? 0, t5 ?? 0, t6 ?? 0, t7 ?? 0, t8 ?? 0, t9 ?? 0, t10 ?? 0,
+        (t1 === '' || t1 === undefined) ? null : t1, 
+        (t2 === '' || t2 === undefined) ? null : t2, 
+        (t3 === '' || t3 === undefined) ? null : t3, 
+        (t4 === '' || t4 === undefined) ? null : t4, 
+        (t5 === '' || t5 === undefined) ? null : t5, 
+        (t6 === '' || t6 === undefined) ? null : t6, 
+        (t7 === '' || t7 === undefined) ? null : t7, 
+        (t8 === '' || t8 === undefined) ? null : t8, 
+        (t9 === '' || t9 === undefined) ? null : t9, 
+        (t10 === '' || t10 === undefined) ? null : t10,
         existing.id);
     return NextResponse.json(db.prepare('SELECT * FROM scores WHERE id=?').get(existing.id));
   } else {
@@ -62,7 +71,16 @@ export async function POST(req: NextRequest) {
     db.prepare(`INSERT INTO scores (id, school_id, student_id, subject_id, class_id, session_id, term, ca1_score, ca2_score, exam_score,
       t1, t2, t3, t4, t5, t6, t7, t8, t9, t10) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, sId, studentId, subjectId, classId, sessionId, term, ca1_score ?? 0, ca2_score ?? 0, exam_score ?? 0,
-        t1 ?? 0, t2 ?? 0, t3 ?? 0, t4 ?? 0, t5 ?? 0, t6 ?? 0, t7 ?? 0, t8 ?? 0, t9 ?? 0, t10 ?? 0);
+        (t1 === '' || t1 === undefined) ? null : t1, 
+        (t2 === '' || t2 === undefined) ? null : t2, 
+        (t3 === '' || t3 === undefined) ? null : t3, 
+        (t4 === '' || t4 === undefined) ? null : t4, 
+        (t5 === '' || t5 === undefined) ? null : t5, 
+        (t6 === '' || t6 === undefined) ? null : t6, 
+        (t7 === '' || t7 === undefined) ? null : t7, 
+        (t8 === '' || t8 === undefined) ? null : t8, 
+        (t9 === '' || t9 === undefined) ? null : t9, 
+        (t10 === '' || t10 === undefined) ? null : t10);
     return NextResponse.json(db.prepare('SELECT * FROM scores WHERE id=?').get(id), { status: 201 });
   }
 }
@@ -84,14 +102,32 @@ export async function PUT(req: NextRequest) {
           t1=?, t2=?, t3=?, t4=?, t5=?, t6=?, t7=?, t8=?, t9=?, t10=?, 
           updated_at=CURRENT_TIMESTAMP WHERE id=?`)
           .run(sc.ca1_score ?? 0, sc.ca2_score ?? 0, sc.exam_score ?? 0, 
-            sc.t1 ?? 0, sc.t2 ?? 0, sc.t3 ?? 0, sc.t4 ?? 0, sc.t5 ?? 0, sc.t6 ?? 0, sc.t7 ?? 0, sc.t8 ?? 0, sc.t9 ?? 0, sc.t10 ?? 0,
+            (sc.t1 === '' || sc.t1 === undefined) ? null : sc.t1, 
+            (sc.t2 === '' || sc.t2 === undefined) ? null : sc.t2, 
+            (sc.t3 === '' || sc.t3 === undefined) ? null : sc.t3, 
+            (sc.t4 === '' || sc.t4 === undefined) ? null : sc.t4, 
+            (sc.t5 === '' || sc.t5 === undefined) ? null : sc.t5, 
+            (sc.t6 === '' || sc.t6 === undefined) ? null : sc.t6, 
+            (sc.t7 === '' || sc.t7 === undefined) ? null : sc.t7, 
+            (sc.t8 === '' || sc.t8 === undefined) ? null : sc.t8, 
+            (sc.t9 === '' || sc.t9 === undefined) ? null : sc.t9, 
+            (sc.t10 === '' || sc.t10 === undefined) ? null : sc.t10,
             existing.id);
       } else {
         const id = uuidv4();
         db.prepare(`INSERT INTO scores (id, school_id, student_id, subject_id, class_id, session_id, term, ca1_score, ca2_score, exam_score,
           t1, t2, t3, t4, t5, t6, t7, t8, t9, t10) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
           .run(id, sId, sc.studentId, sc.subjectId, sc.classId, sc.sessionId, sc.term, sc.ca1_score ?? 0, sc.ca2_score ?? 0, sc.exam_score ?? 0,
-            sc.t1 ?? 0, sc.t2 ?? 0, sc.t3 ?? 0, sc.t4 ?? 0, sc.t5 ?? 0, sc.t6 ?? 0, sc.t7 ?? 0, sc.t8 ?? 0, sc.t9 ?? 0, sc.t10 ?? 0);
+            (sc.t1 === '' || sc.t1 === undefined) ? null : sc.t1, 
+            (sc.t2 === '' || sc.t2 === undefined) ? null : sc.t2, 
+            (sc.t3 === '' || sc.t3 === undefined) ? null : sc.t3, 
+            (sc.t4 === '' || sc.t4 === undefined) ? null : sc.t4, 
+            (sc.t5 === '' || sc.t5 === undefined) ? null : sc.t5, 
+            (sc.t6 === '' || sc.t6 === undefined) ? null : sc.t6, 
+            (sc.t7 === '' || sc.t7 === undefined) ? null : sc.t7, 
+            (sc.t8 === '' || sc.t8 === undefined) ? null : sc.t8, 
+            (sc.t9 === '' || sc.t9 === undefined) ? null : sc.t9, 
+            (sc.t10 === '' || sc.t10 === undefined) ? null : sc.t10);
       }
     }
   });
