@@ -34,28 +34,56 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session || session.role === 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  try {
+    const session = await getSession();
+    if (!session || session.role === 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const { name, code, category, schoolId } = await req.json();
-  const sId = schoolId || session.schoolId;
+    const { name, code, category, schoolId } = await req.json();
+    const sId = schoolId || session.schoolId;
 
-  const db = getDb();
-  const id = uuidv4();
-  db.prepare('INSERT INTO subjects (id, school_id, name, code, category) VALUES (?, ?, ?, ?, ?)')
-    .run(id, sId, name, code || '', category || 'secondary');
+    const db = getDb();
+    
+    // Check for existing subject with same name and category
+    const existing = db.prepare('SELECT id FROM subjects WHERE school_id = ? AND name = ? AND category = ?')
+      .get(sId, name, category || 'secondary');
+    
+    if (existing) {
+      return NextResponse.json({ error: `Subject "${name}" already exists in this category` }, { status: 400 });
+    }
 
-  return NextResponse.json(db.prepare('SELECT * FROM subjects WHERE id=?').get(id), { status: 201 });
+    const id = uuidv4();
+    db.prepare('INSERT INTO subjects (id, school_id, name, code, category) VALUES (?, ?, ?, ?, ?)')
+      .run(id, sId, name, code || '', category || 'secondary');
+
+    return NextResponse.json(db.prepare('SELECT * FROM subjects WHERE id=?').get(id), { status: 201 });
+  } catch (error: any) {
+    console.error('SUBJECT_POST_ERROR:', error);
+    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  }
 }
 
 export async function PUT(req: NextRequest) {
-  const session = await getSession();
-  if (!session || session.role === 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  try {
+    const session = await getSession();
+    if (!session || session.role === 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const { id, name, code, category } = await req.json();
-  const db = getDb();
-  db.prepare('UPDATE subjects SET name=?, code=?, category=? WHERE id=?').run(name, code, category, id);
-  return NextResponse.json(db.prepare('SELECT * FROM subjects WHERE id=?').get(id));
+    const { id, name, code, category } = await req.json();
+    const db = getDb();
+
+    // Check for existing subject with same name and category (excluding self)
+    const existing = db.prepare('SELECT id FROM subjects WHERE name = ? AND category = ? AND id != ? AND school_id = (SELECT school_id FROM subjects WHERE id = ?)')
+      .get(name, category, id, id);
+    
+    if (existing) {
+      return NextResponse.json({ error: `Subject "${name}" already exists in this category` }, { status: 400 });
+    }
+
+    db.prepare('UPDATE subjects SET name=?, code=?, category=? WHERE id=?').run(name, code, category, id);
+    return NextResponse.json(db.prepare('SELECT * FROM subjects WHERE id=?').get(id));
+  } catch (error: any) {
+    console.error('SUBJECT_PUT_ERROR:', error);
+    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  }
 }
 
 export async function DELETE(req: NextRequest) {

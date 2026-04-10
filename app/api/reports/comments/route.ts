@@ -19,6 +19,21 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
 
+  // If user is a teacher, check if they are the assigned Class Teacher for this class
+  if (session.role === 'teacher') {
+    const teacher = db.prepare('SELECT id FROM teachers WHERE user_id = ?').get(session.userId) as any;
+    if (!teacher) return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 });
+
+    const assignment = db.prepare(`
+      SELECT id FROM teacher_assignments 
+      WHERE teacher_id = ? AND class_id = ? AND session_id = ? AND subject_id IS NULL
+    `).get(teacher.id, classId, sessionId);
+
+    if (!assignment) {
+      return NextResponse.json({ error: 'You are not assigned as the Class Teacher for this class' }, { status: 403 });
+    }
+  }
+
   // Get all students in the class
   const students = db.prepare(`
     SELECT id, first_name, middle_name, last_name, admission_number
@@ -50,6 +65,21 @@ export async function POST(req: NextRequest) {
   }
 
   const db = getDb();
+
+  // If user is a teacher, check if they are the assigned Class Teacher for this class
+  if (session.role === 'teacher') {
+    const teacher = db.prepare('SELECT id FROM teachers WHERE user_id = ?').get(session.userId) as any;
+    if (!teacher) return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 });
+
+    const assignment = db.prepare(`
+      SELECT id FROM teacher_assignments 
+      WHERE teacher_id = ? AND class_id = ? AND session_id = ? AND subject_id IS NULL
+    `).get(teacher.id, classId, sessionId);
+
+    if (!assignment) {
+      return NextResponse.json({ error: 'You are not assigned as the Class Teacher for this class' }, { status: 403 });
+    }
+  }
 
   try {
     const transaction = db.transaction(() => {
