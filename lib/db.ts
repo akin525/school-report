@@ -106,6 +106,8 @@ function initializeSchema(db: Database.Database) {
   addColumn('schools', 'secondary_max_ca2', 'REAL DEFAULT 20');
   addColumn('schools', 'secondary_max_exam', 'REAL DEFAULT 60');
   addColumn('schools', 'secondary_max_weekly', 'REAL DEFAULT 10');
+  addColumn('generated_questions', 'question_type', "TEXT DEFAULT 'multiple_choice'");
+  addColumn('generated_questions', 'correct_answer_text', 'TEXT');
 
   db.exec(`
     -- Classes / Arms
@@ -294,6 +296,78 @@ function initializeSchema(db: Database.Database) {
       FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
       FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
       UNIQUE(student_id, session_id, term)
+    );
+
+    -- Lesson Notes
+    CREATE TABLE IF NOT EXISTS lesson_notes (
+      id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL,
+      teacher_id TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      class_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      term INTEGER NOT NULL CHECK(term IN (1,2,3)),
+      title TEXT NOT NULL,
+      content TEXT,
+      file_url TEXT,
+      file_name TEXT,
+      file_type TEXT,
+      topic TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
+      FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE,
+      FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    );
+
+    -- Generated Questions (Multiple Choice)
+    CREATE TABLE IF NOT EXISTS generated_questions (
+      id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL,
+      lesson_note_id TEXT NOT NULL,
+      question_text TEXT NOT NULL,
+      option_a TEXT NOT NULL,
+      option_b TEXT NOT NULL,
+      option_c TEXT NOT NULL,
+      option_d TEXT NOT NULL,
+      correct_answer TEXT NOT NULL CHECK(correct_answer IN ('A','B','C','D')),
+      difficulty TEXT DEFAULT 'medium' CHECK(difficulty IN ('easy','medium','hard')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
+      FOREIGN KEY (lesson_note_id) REFERENCES lesson_notes(id) ON DELETE CASCADE
+    );
+
+    -- Question Bank (Teacher Uploaded Questions)
+    CREATE TABLE IF NOT EXISTS question_bank (
+      id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL,
+      teacher_id TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      class_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      term INTEGER NOT NULL CHECK(term IN (1,2,3)),
+      question_text TEXT NOT NULL,
+      option_a TEXT,
+      option_b TEXT,
+      option_c TEXT,
+      option_d TEXT,
+      correct_answer TEXT NOT NULL,
+      question_type TEXT DEFAULT 'multiple_choice' CHECK(question_type IN ('multiple_choice','short_answer','essay','true_false')),
+      difficulty TEXT DEFAULT 'medium' CHECK(difficulty IN ('easy','medium','hard')),
+      marks INTEGER DEFAULT 1,
+      file_url TEXT,
+      file_name TEXT,
+      file_type TEXT,
+      topic TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
+      FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE,
+      FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
     );
   `);
 }

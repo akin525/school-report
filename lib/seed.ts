@@ -139,5 +139,48 @@ export async function seedDatabase() {
     insertSubject.run(uuidv4(), schoolId, sub.name, sub.category);
   }
 
+  // Insert sample teachers and assignments
+  const teacherId = uuidv4();
+  const teacherUserId = uuidv4();
+  const teacherHash = await hashPassword('teacher123');
+  
+  // Insert teacher user
+  db.prepare(`
+    INSERT INTO users (id, school_id, name, email, password_hash, role)
+    VALUES (?, ?, ?, ?, ?, 'teacher')
+  `).run(teacherUserId, schoolId, 'John Teacher', 'teacher@hallmarkschools.ng', teacherHash);
+  
+  // Insert teacher
+  db.prepare(`
+    INSERT INTO teachers (id, school_id, user_id, name, email, qualification, category)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(teacherId, schoolId, teacherUserId, 'John Teacher', 'teacher@hallmarkschools.ng', 'B.Ed Mathematics', 'secondary');
+  
+  // Get class and subject IDs for assignments
+  const year7Class = db.prepare('SELECT id FROM classes WHERE name = ? AND school_id = ?').get('Year 7', schoolId) as any;
+  const year8Class = db.prepare('SELECT id FROM classes WHERE name = ? AND school_id = ?').get('Year 8', schoolId) as any;
+  const mathsSubject = db.prepare('SELECT id FROM subjects WHERE name = ? AND school_id = ?').get('MATHS', schoolId) as any;
+  const englishSubject = db.prepare('SELECT id FROM subjects WHERE name = ? AND school_id = ?').get('ENGLISH', schoolId) as any;
+  const physicsSubject = db.prepare('SELECT id FROM subjects WHERE name = ? AND school_id = ?').get('PHYSICS', schoolId) as any;
+  
+  // Insert teacher assignments
+  const assignments = [
+    { classId: year7Class?.id, subjectId: mathsSubject?.id },
+    { classId: year7Class?.id, subjectId: englishSubject?.id },
+    { classId: year8Class?.id, subjectId: mathsSubject?.id },
+    { classId: year8Class?.id, subjectId: physicsSubject?.id },
+  ];
+  
+  const insertAssignment = db.prepare(`
+    INSERT INTO teacher_assignments (id, school_id, teacher_id, subject_id, class_id, session_id)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  
+  for (const assignment of assignments) {
+    if (assignment.classId && assignment.subjectId) {
+      insertAssignment.run(uuidv4(), schoolId, teacherId, assignment.subjectId, assignment.classId, sessionId);
+    }
+  }
+
   console.log('Database seeded successfully');
 }
