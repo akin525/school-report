@@ -78,8 +78,6 @@ function initializeSchema(db: Database.Database) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
     );
-
-    -- Migration: Add category-specific names and max scores if missing
   `);
 
   // Helper to add column if not exists
@@ -91,6 +89,7 @@ function initializeSchema(db: Database.Database) {
     }
   };
 
+  // Schools migrations
   addColumn('schools', 'nursery_name', 'TEXT');
   addColumn('schools', 'primary_name', 'TEXT');
   addColumn('schools', 'secondary_name', 'TEXT');
@@ -106,8 +105,6 @@ function initializeSchema(db: Database.Database) {
   addColumn('schools', 'secondary_max_ca2', 'REAL DEFAULT 20');
   addColumn('schools', 'secondary_max_exam', 'REAL DEFAULT 60');
   addColumn('schools', 'secondary_max_weekly', 'REAL DEFAULT 10');
-  addColumn('generated_questions', 'question_type', "TEXT DEFAULT 'multiple_choice'");
-  addColumn('generated_questions', 'correct_answer_text', 'TEXT');
 
   db.exec(`
     -- Classes / Arms
@@ -206,6 +203,8 @@ function initializeSchema(db: Database.Database) {
       ca1_score REAL DEFAULT 0,
       ca2_score REAL DEFAULT 0,
       exam_score REAL DEFAULT 0,
+      t1 REAL, t2 REAL, t3 REAL, t4 REAL, t5 REAL,
+      t6 REAL, t7 REAL, t8 REAL, t9 REAL, t10 REAL,
       total REAL GENERATED ALWAYS AS (ca1_score + ca2_score + exam_score) STORED,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -216,7 +215,14 @@ function initializeSchema(db: Database.Database) {
       FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
       UNIQUE(student_id, subject_id, session_id, term)
     );
+  `);
 
+  // Scores migrations for weekly scores (t1-t10)
+  for (let i = 1; i <= 10; i++) {
+    addColumn('scores', `t${i}`, 'REAL');
+  }
+
+  db.exec(`
     -- Affective Traits
     CREATE TABLE IF NOT EXISTS affective_traits (
       id TEXT PRIMARY KEY,
@@ -332,8 +338,11 @@ function initializeSchema(db: Database.Database) {
       option_b TEXT NOT NULL,
       option_c TEXT NOT NULL,
       option_d TEXT NOT NULL,
-      correct_answer TEXT NOT NULL CHECK(correct_answer IN ('A','B','C','D')),
+      correct_answer TEXT NOT NULL,
+      correct_answer_text TEXT,
+      question_type TEXT DEFAULT 'multiple_choice',
       difficulty TEXT DEFAULT 'medium' CHECK(difficulty IN ('easy','medium','hard')),
+      note TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
       FOREIGN KEY (lesson_note_id) REFERENCES lesson_notes(id) ON DELETE CASCADE
@@ -361,6 +370,7 @@ function initializeSchema(db: Database.Database) {
       file_name TEXT,
       file_type TEXT,
       topic TEXT,
+      note TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
@@ -370,6 +380,12 @@ function initializeSchema(db: Database.Database) {
       FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
     );
   `);
+
+  // Migrations for newer columns in question tables
+  addColumn('generated_questions', 'question_type', "TEXT DEFAULT 'multiple_choice'");
+  addColumn('generated_questions', 'correct_answer_text', 'TEXT');
+  addColumn('generated_questions', 'note', 'TEXT');
+  addColumn('question_bank', 'note', 'TEXT');
 }
 
 export default getDb;
