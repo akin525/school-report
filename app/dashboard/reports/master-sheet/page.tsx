@@ -7,6 +7,8 @@ export default function MasterScoreSheetPage() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [teacherAssignments, setTeacherAssignments] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
   const [selectedSession, setSelectedSession] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
@@ -25,6 +27,7 @@ export default function MasterScoreSheetPage() {
         router.push('/login');
         return;
       }
+      setUser(d.user);
       const sid = d.user.school_id;
       
       setSchool(d.school);
@@ -33,22 +36,82 @@ export default function MasterScoreSheetPage() {
         const curr = sess.find((s: any) => s.is_current) || sess[0];
         if (curr) setSelectedSession(curr.id);
       });
-      fetch(`/api/classes?schoolId=${sid}`).then(r => r.json()).then(cls => setClasses(cls.filter((c: any) => c.category === 'secondary')));
+      
+      // Fetch teacher assignments to filter classes and subjects
+      fetch(`/api/teacher-assignments?schoolId=${sid}`).then(r => r.json()).then(assignments => {
+        setTeacherAssignments(assignments);
+        
+        // If user is admin or no assignments, fetch all classes and subjects
+        if (d.user.role === 'superadmin' || d.user.role === 'school_admin' || assignments.length === 0) {
+          fetch(`/api/classes?schoolId=${sid}`).then(r => r.json()).then(cls => {
+            const secondaryClasses = cls.filter((c: any) => c.category === 'secondary');
+            setClasses(secondaryClasses);
+          });
+          fetch(`/api/subjects?schoolId=${sid}`).then(r => r.json()).then(subjs => {
+            const secondarySubjects = subjs.filter((s: any) => s.category === 'secondary');
+            setSubjects(secondarySubjects);
+          });
+        } else {
+          // Extract unique classes from assignments (only secondary)
+          const uniqueClasses = assignments
+            .reduce((acc: any[], assignment: any) => {
+              if (!acc.find((c: any) => c.id === assignment.class_id)) {
+                acc.push({
+                  id: assignment.class_id,
+                  name: assignment.class_name,
+                  arm: assignment.class_arm
+                });
+              }
+              return acc;
+            }, []);
+          setClasses(uniqueClasses.filter((c: any) => c.name?.toLowerCase().includes('ss') || c.name?.toLowerCase().includes('jss') || c.name?.toLowerCase().includes('sss')));
+          
+          // Extract unique subjects from assignments
+          const uniqueSubjects = assignments.reduce((acc: any[], assignment: any) => {
+            if (assignment.subject_id && !acc.find((s: any) => s.id === assignment.subject_id)) {
+              acc.push({
+                id: assignment.subject_id,
+                name: assignment.subject_name
+              });
+            }
+            return acc;
+          }, []);
+          setSubjects(uniqueSubjects);
+        }
+      });
     });
   }, [router]);
 
   useEffect(() => {
+    // Filter subjects based on selected class from teacher assignments or fetch all subjects
     if (selectedClass) {
-      fetch(`/api/subjects?classId=${selectedClass}`).then(r => r.json()).then(subjs => {
-        setSubjects(subjs);
-        if (subjs.length > 0) setSelectedSubject(subjs[0].id);
+      if (teacherAssignments.length > 0 && user?.role !== 'superadmin' && user?.role !== 'school_admin') {
+        // Filter subjects based on teacher assignments
+        const classSubjects = teacherAssignments
+          .filter(assignment => assignment.class_id === selectedClass && assignment.subject_id)
+          .reduce((acc: any[], assignment: any) => {
+            if (!acc.find((s: any) => s.id === assignment.subject_id)) {
+              acc.push({
+                id: assignment.subject_id,
+                name: assignment.subject_name
+              });
+            }
+            return acc;
+          }, []);
+        setSubjects(classSubjects);
+        if (classSubjects.length > 0) setSelectedSubject(classSubjects[0].id);
         else setSelectedSubject('');
-      });
-    } else {
-      setSubjects([]);
-      setSelectedSubject('');
+      } else {
+        // Fetch all subjects for the selected class (admin or no assignments)
+        fetch(`/api/subjects?classId=${selectedClass}`).then(r => r.json()).then(subjs => {
+          const secondarySubjects = subjs.filter((s: any) => s.category === 'secondary');
+          setSubjects(secondarySubjects);
+          if (secondarySubjects.length > 0) setSelectedSubject(secondarySubjects[0].id);
+          else setSelectedSubject('');
+        });
+      }
     }
-  }, [selectedClass]);
+  }, [selectedClass, teacherAssignments, user]);
 
   const loadData = useCallback(async () => {
     if (!selectedSession || !selectedClass || !selectedSubject || !selectedTerm) return;

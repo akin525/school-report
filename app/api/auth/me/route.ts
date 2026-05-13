@@ -17,9 +17,9 @@ export async function GET() {
   if (user.school_id) {
     school = db.prepare('SELECT * FROM schools WHERE id = ?').get(user.school_id) as any;
     grading = db.prepare('SELECT * FROM grading_system WHERE school_id = ? ORDER BY min_score DESC').all(user.school_id);
-    if (user.role === 'teacher') {
-      teacher = db.prepare('SELECT * FROM teachers WHERE user_id = ?').get(user.id) as any;
-    }
+
+    // Always try to find a teacher record for the user, regardless of role
+    teacher = db.prepare('SELECT * FROM teachers WHERE user_id = ? AND school_id = ?').get(user.id, user.school_id) as any;
   }
   
   return NextResponse.json({ user, school, teacher, grading });

@@ -18,6 +18,8 @@ const navItems = [
   { href: '/dashboard/subjects', icon: '📚', label: 'Subjects', roles: ['superadmin','school_admin'] },
   { href: '/dashboard/teachers', icon: '👨‍🏫', label: 'Teachers', roles: ['superadmin','school_admin'] },
   { href: '/dashboard/students', icon: '👨‍🎓', label: 'Students', roles: ['superadmin','school_admin','teacher'] },
+  { href: '/dashboard/lesson-notes', icon: '📖', label: 'Lesson Notes', roles: ['superadmin','school_admin','teacher'] },
+  { href: '/dashboard/question-bank', icon: '📝', label: 'Question Bank', roles: ['superadmin','school_admin','teacher'] },
   { href: '/dashboard/scores', icon: '📝', label: 'Enter Scores', roles: ['superadmin','school_admin','teacher'] },
   { href: '/dashboard/reports', icon: '📊', label: 'Reports', roles: ['superadmin','school_admin','teacher'] },
   { href: '/dashboard/settings', icon: '⚙️', label: 'Settings', roles: ['superadmin','school_admin'] },
