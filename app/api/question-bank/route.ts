@@ -10,6 +10,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Security check: Students are not allowed to access the raw question bank
+    if (session.role === 'student') {
+      return NextResponse.json({ error: 'Access denied: Students cannot access the question bank directly' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const schoolId = searchParams.get('schoolId');
     const teacherId = searchParams.get('teacherId');

@@ -15,6 +15,8 @@ export default function CommentsManagementPage() {
   const [selectedTerm, setSelectedTerm] = useState('1');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiProvider, setAIProvider] = useState<'gemini' | 'openai'>('openai');
   const [saveMsg, setSaveMsg] = useState('');
 
   // Global Class Settings
@@ -174,6 +176,52 @@ export default function CommentsManagementPage() {
     }
   };
 
+  const handleAIGenerateComments = async () => {
+    if (!selectedClass || !selectedSession || !selectedTerm) return;
+    setIsGeneratingAI(true);
+
+    try {
+      const scoreRes = await fetch(`/api/scores?classId=${selectedClass}&sessionId=${selectedSession}&term=${selectedTerm}&schoolId=${schoolId}`);
+      const scores = await scoreRes.json();
+
+      const aiRes = await fetch('/api/reports/ai-comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          students: students,
+          scores: scores,
+          term: selectedTerm,
+          provider: aiProvider
+        })
+      });
+
+      if (aiRes.ok) {
+        const data = await aiRes.json();
+        const aiComments = data.comments;
+
+        const updatedComments = { ...comments };
+        students.forEach(st => {
+          if (aiComments[st.id]) {
+            updatedComments[st.id] = {
+              ...(updatedComments[st.id] || {}),
+              student_id: st.id,
+              class_teacher_remark: aiComments[st.id]
+            };
+          }
+        });
+        setComments(updatedComments);
+        setSaveMsg('AI remarks generated! Don\'t forget to Save All Changes.');
+      } else {
+        const error = await aiRes.json();
+        alert('Failed to generate AI comments: ' + error.error);
+      }
+    } catch (error) {
+      alert('Error generating AI comments');
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto bg-gray-50 min-h-screen">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -181,15 +229,40 @@ export default function CommentsManagementPage() {
           <h1 className="text-3xl font-extrabold text-blue-900">Report Card Comments</h1>
           <p className="text-gray-600 mt-1">Manage class-wide settings and individual student comments</p>
         </div>
-        <button
-          onClick={saveAll}
-          disabled={saving || loading}
-          className={`px-8 py-3 rounded-xl font-bold text-white shadow-lg transition-all transform active:scale-95 ${
-            saving ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-200'
-          }`}
-        >
-          {saving ? 'Saving...' : 'Save All Changes'}
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+            <span className="text-xs font-bold text-gray-400 mr-2 uppercase">Provider:</span>
+            <select
+              className="text-xs font-bold text-gray-700 outline-none bg-transparent"
+              value={aiProvider}
+              onChange={(e: any) => setAIProvider(e.target.value)}
+            >
+              <option value="openai">ChatGPT</option>
+              <option value="gemini">Gemini</option>
+            </select>
+          </div>
+          <button
+            onClick={handleAIGenerateComments}
+            disabled={isGeneratingAI || loading || students.length === 0}
+            className={`px-6 py-3 rounded-xl font-bold text-white shadow-lg transition-all transform active:scale-95 flex items-center gap-2 ${
+              isGeneratingAI ? 'bg-purple-300 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 hover:shadow-purple-200'
+            }`}
+          >
+            {isGeneratingAI ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : <span className="text-xl leading-none">✨</span>}
+            AI Generate Remarks
+          </button>
+          <button
+            onClick={saveAll}
+            disabled={saving || loading}
+            className={`px-8 py-3 rounded-xl font-bold text-white shadow-lg transition-all transform active:scale-95 ${
+              saving ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-200'
+            }`}
+          >
+            {saving ? 'Saving...' : 'Save All Changes'}
+          </button>
+        </div>
       </div>
 
       {saveMsg && (

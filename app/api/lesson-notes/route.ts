@@ -23,6 +23,13 @@ export async function GET(request: NextRequest) {
     }
 
     const db = getDb();
+
+    let actualClassId = classId;
+    if (session.role === 'student' && session.userId) {
+      const student = db.prepare('SELECT class_id FROM students WHERE user_id = ?').get(session.userId) as any;
+      if (student) actualClassId = student.class_id;
+    }
+
     let query = `
       SELECT ln.*, t.name as teacher_name, s.name as subject_name, c.name as class_name, 
              c.arm as class_arm, sess.name as session_name
@@ -43,9 +50,9 @@ export async function GET(request: NextRequest) {
       query += ' AND ln.subject_id = ?';
       params.push(subjectId);
     }
-    if (classId) {
+    if (actualClassId) {
       query += ' AND ln.class_id = ?';
-      params.push(classId);
+      params.push(actualClassId);
     }
     if (sessionId) {
       query += ' AND ln.session_id = ?';

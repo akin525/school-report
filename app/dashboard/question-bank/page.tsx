@@ -28,6 +28,50 @@ export default function QuestionBankPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<any>(null);
   const [uploadResults, setUploadResults] = useState<any[]>([]);
+  const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set());
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiTopic, setAiTopic] = useState('');
+  const [aiQuestionCount, setAiQuestionCount] = useState(5);
+  const [aiQuestionType, setAiQuestionType] = useState('multiple_choice');
+  const [aiDifficulty, setAiDifficulty] = useState('medium');
+  const [aiProvider, setAIProvider] = useState<'gemini' | 'openai'>('openai');
+
+  const toggleQuestionSelection = (id: string) => {
+    setSelectedQuestions(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllSelection = () => {
+    if (selectedQuestions.size === questions.length) {
+      setSelectedQuestions(new Set());
+    } else {
+      setSelectedQuestions(new Set(questions.map(q => q.id)));
+    }
+  };
+
+  const deleteSelectedQuestions = async () => {
+    if (selectedQuestions.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedQuestions.size} selected questions?`)) return;
+
+    setLoading(true);
+    try {
+      const deletePromises = Array.from(selectedQuestions).map(id =>
+        fetch(`/api/question-bank/${id}`, { method: 'DELETE' })
+      );
+      await Promise.all(deletePromises);
+      setSelectedQuestions(new Set());
+      loadQuestions();
+    } catch (error) {
+      alert('Failed to delete some questions');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const updateUploadResult = (index: number, field: string, value: any) => {
     setUploadResults(prev => prev.map((q, i) =>
@@ -159,9 +203,14 @@ export default function QuestionBankPage() {
       
       const res = await fetch(`/api/question-bank?${params}`);
       const data = await res.json();
-      setQuestions(data);
+      if (Array.isArray(data)) {
+        setQuestions(data);
+      } else {
+        setQuestions([]);
+      }
     } catch (error) {
       console.error('Error loading questions:', error);
+      setQuestions([]);
     } finally {
       setLoading(false);
     }
@@ -591,6 +640,58 @@ export default function QuestionBankPage() {
     }
   };
 
+  const handleAIGenerate = async () => {
+    if (!aiTopic || !selectedSubject) {
+      alert('Please enter a topic and select a subject');
+      return;
+    }
+    setIsGeneratingAI(true);
+    try {
+      const subject = subjects.find(s => s.id === selectedSubject)?.name;
+      const level = classes.find(c => c.id === selectedClass)?.name;
+
+      const res = await fetch('/api/question-bank/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: aiTopic,
+          subject: subject,
+          level: level,
+          count: aiQuestionCount,
+          type: aiQuestionType,
+          difficulty: aiDifficulty,
+          provider: aiProvider
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUploadResults(data.questions.map((q: any) => ({
+          ...q,
+          questionText: q.question_text,
+          optionA: q.option_a,
+          optionB: q.option_b,
+          optionC: q.option_c,
+          optionD: q.option_d,
+          correctAnswer: q.correct_answer,
+          marks: aiDifficulty === 'hard' ? 5 : aiDifficulty === 'medium' ? 2 : 1,
+          topic: `AI Generated: ${aiTopic}`,
+          difficulty: q.difficulty || aiDifficulty,
+          type: aiQuestionType
+        })));
+        setShowAIModal(false);
+        setShowUploadModal(true); // Reuse the preview modal
+      } else {
+        const err = await res.json();
+        alert('AI Generation failed: ' + err.error);
+      }
+    } catch (e) {
+      alert('Error generating questions');
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
   const downloadTemplate = async () => {
     try {
       const response = await fetch('/api/download/question-template');
@@ -635,6 +736,13 @@ export default function QuestionBankPage() {
                 <span className="text-lg">📄</span> Word (DOC)
               </button>
             </div>
+
+            <button
+              onClick={() => setShowAIModal(true)}
+              className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-700 rounded-lg hover:from-purple-700 hover:to-indigo-800 shadow-md hover:shadow-lg transition-all active:scale-95"
+            >
+              <span className="text-xl">✨</span> AI Generate
+            </button>
 
             <button
               onClick={() => setShowCreateModal(true)}
@@ -741,6 +849,27 @@ export default function QuestionBankPage() {
 
       {/* Questions List */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              checked={questions.length > 0 && selectedQuestions.size === questions.length}
+              onChange={toggleAllSelection}
+            />
+            <span className="text-sm font-medium text-gray-600">
+              {selectedQuestions.size > 0 ? `${selectedQuestions.size} selected` : 'Select All'}
+            </span>
+          </div>
+          {selectedQuestions.size > 0 && (
+            <button
+              onClick={deleteSelectedQuestions}
+              className="bg-red-50 text-red-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors border border-red-200"
+            >
+              🗑️ Delete Selected
+            </button>
+          )}
+        </div>
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -756,6 +885,7 @@ export default function QuestionBankPage() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="p-4"></th>
                   <th className="text-left p-4 font-semibold text-gray-700">Question</th>
                   <th className="text-left p-4 font-semibold text-gray-700">Topic</th>
                   <th className="text-left p-4 font-semibold text-gray-700">Type</th>
@@ -767,7 +897,15 @@ export default function QuestionBankPage() {
               </thead>
               <tbody>
                 {questions.map((question: any, index: number) => (
-                  <tr key={question.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={question.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${selectedQuestions.has(question.id) ? 'bg-blue-50/50' : ''}`}>
+                    <td className="p-4 text-center">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        checked={selectedQuestions.has(question.id)}
+                        onChange={() => toggleQuestionSelection(question.id)}
+                      />
+                    </td>
                     <td className="p-4">
                       <div className="max-w-md">
                         <span className="font-medium">{index + 1}.</span> {question.question_text}
@@ -1121,6 +1259,102 @@ export default function QuestionBankPage() {
                   className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-semibold"
                 >
                   Parse Questions
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Generation Modal */}
+      {showAIModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-gradient-to-r from-purple-800 to-indigo-900 p-6 text-white">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <span>✨</span> AI Question Generator
+              </h2>
+              <p className="text-purple-200 text-sm">Generate questions for any topic using AI</p>
+            </div>
+            <div className="p-8 space-y-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Topic *</label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+                    placeholder="e.g. Newton's Laws of Motion"
+                    value={aiTopic}
+                    onChange={(e) => setAiTopic(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">AI Provider</label>
+                  <select
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+                    value={aiProvider}
+                    onChange={(e: any) => setAIProvider(e.target.value)}
+                  >
+                    <option value="openai">ChatGPT (OpenAI)</option>
+                    <option value="gemini">Gemini (Google)</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Question Type</label>
+                    <select
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+                      value={aiQuestionType}
+                      onChange={(e) => setAiQuestionType(e.target.value)}
+                    >
+                      <option value="multiple_choice">Multiple Choice</option>
+                      <option value="short_answer">Theory / Short Answer</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Difficulty</label>
+                    <select
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+                      value={aiDifficulty}
+                      onChange={(e) => setAiDifficulty(e.target.value)}
+                    >
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Number of Questions</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+                    value={aiQuestionCount}
+                    onChange={(e) => setAiQuestionCount(parseInt(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t flex gap-3">
+                <button
+                  onClick={() => setShowAIModal(false)}
+                  className="flex-1 px-4 py-3 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAIGenerate}
+                  disabled={isGeneratingAI || !aiTopic || !selectedSubject}
+                  className="flex-1 px-4 py-3 text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-700 rounded-xl shadow-md hover:shadow-lg transition-all active:scale-95 disabled:from-gray-400 disabled:to-gray-500"
+                >
+                  {isGeneratingAI ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Generating...
+                    </div>
+                  ) : 'Generate Now'}
                 </button>
               </div>
             </div>

@@ -11,6 +11,7 @@ export default function ReportsPage() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
+  const [student, setStudent] = useState<any>(null);
   const [selectedSession, setSelectedSession] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('1');
@@ -30,6 +31,7 @@ export default function ReportsPage() {
       setSchoolId(sid);
       setUser(d.user);
       setTeacher(d.teacher);
+      setStudent(d.student);
 
       Promise.all([
         fetch(`/api/sessions?schoolId=${sid}`).then(r => r.json()),
@@ -69,29 +71,33 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-800">Reports</h1>
-        <p className="text-gray-500 text-sm mt-1">Generate report cards and broadsheets</p>
+        <p className="text-gray-500 text-sm mt-1">
+          {user?.role === 'student' ? 'Access your academic performance reports' : 'Generate report cards and broadsheets'}
+        </p>
       </div>
 
-      {/* Report Type Tabs */}
-      <div className="flex flex-wrap justify-between items-center gap-4">
-        <div className="flex gap-2">
-          {[{ id: 'individual', label: '📋 Individual Report Card', icon: '👤' }, 
-            { id: 'broadsheet', label: '📊 Class Broadsheet', icon: '📊' }
-          ].map(t => (
-            <button key={t.id} onClick={() => setReportType(t.id as any)}
-              className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${reportType === t.id ? 'bg-blue-700 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
-              {t.label}
-            </button>
-          ))}
+      {/* Report Type Tabs - Hide for students */}
+      {user?.role !== 'student' && (
+        <div className="flex flex-wrap justify-between items-center gap-4">
+          <div className="flex gap-2">
+            {[{ id: 'individual', label: '📋 Individual Report Card', icon: '👤' },
+              { id: 'broadsheet', label: '📊 Class Broadsheet', icon: '📊' }
+            ].map(t => (
+              <button key={t.id} onClick={() => setReportType(t.id as any)}
+                className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${reportType === t.id ? 'bg-blue-700 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <Link
+            href="/dashboard/reports/comments"
+            className="px-5 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-all flex items-center shadow-md"
+          >
+            <span className="mr-2">✍️</span> Batch Manage Comments
+          </Link>
         </div>
-        
-        <Link 
-          href="/dashboard/reports/comments" 
-          className="px-5 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-all flex items-center shadow-md"
-        >
-          <span className="mr-2">✍️</span> Batch Manage Comments
-        </Link>
-      </div>
+      )}
 
       {/* Filters */}
       <div className="card">
@@ -103,13 +109,15 @@ export default function ReportsPage() {
               {sessions.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
-          <div>
-            <label className="label">Class</label>
-            <select className="input" value={selectedClass} onChange={e => setSelectedClass(e.target.value)}>
-              <option value="">Select class</option>
-              {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
-            </select>
-          </div>
+          {user?.role !== 'student' && (
+            <div>
+              <label className="label">Class</label>
+              <select className="input" value={selectedClass} onChange={e => setSelectedClass(e.target.value)}>
+                <option value="">Select class</option>
+                {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label className="label">Term</label>
             <select className="input" value={selectedTerm} onChange={e => setSelectedTerm(e.target.value)}>
@@ -128,8 +136,33 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Individual Report Cards */}
-      {reportType === 'individual' && (
+      {/* Student View */}
+      {user?.role === 'student' && student && (
+        <div className="flex justify-center py-8">
+          <div className="w-full max-w-md bg-white border-2 border-blue-100 rounded-2xl p-8 shadow-xl text-center">
+            <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              {student.photo_url ? (
+                <img src={student.photo_url} alt="" className="w-24 h-24 rounded-full object-cover border-4 border-white shadow" />
+              ) : (
+                <span className="text-blue-700 font-bold text-3xl">{student.first_name?.[0]}{student.last_name?.[0]}</span>
+              )}
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">{student.first_name} {student.last_name}</h2>
+            <p className="text-blue-600 font-medium mb-8">Adm No: {student.admission_number}</p>
+
+            <Link
+              href={`/dashboard/reports/card?studentId=${student.id}&sessionId=${selectedSession}&term=${selectedTerm}&format=${reportFormat}`}
+              className="block w-full py-4 bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-xl font-bold shadow-lg hover:from-blue-800 hover:to-blue-700 transition-all transform hover:scale-[1.02]"
+            >
+              📥 Download My Report Card
+            </Link>
+            <p className="mt-6 text-xs text-gray-400">Select session and term above to view results from previous periods.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Individual Report Cards (Admin/Teacher View) */}
+      {reportType === 'individual' && user?.role !== 'student' && (
         <div>
           {!selectedClass ? (
             <div className="card text-center py-16 text-gray-400">

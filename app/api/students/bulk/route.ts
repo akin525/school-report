@@ -17,8 +17,8 @@ export async function POST(req: NextRequest) {
 
     const db = getDb();
     const insertStmt = db.prepare(`
-      INSERT INTO students (id, school_id, admission_number, first_name, middle_name, last_name, class_id, date_of_birth, gender, admission_year)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO students (id, school_id, admission_number, first_name, middle_name, last_name, class_id, date_of_birth, gender, admission_year, email)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     // Use a transaction for bulk insert
@@ -35,7 +35,8 @@ export async function POST(req: NextRequest) {
           student.class_id || null,
           student.date_of_birth || '',
           student.gender || '',
-          student.admission_year || ''
+          student.admission_year || '',
+          student.email || null
         );
       }
     });

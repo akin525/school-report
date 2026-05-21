@@ -70,14 +70,20 @@ export async function POST(request: NextRequest) {
         textToProcess = extractRelevantSection(rawText, htmlContent, selectedTopic);
     }
 
-    const generatedQuestions = generateSmartQuestions(textToProcess, numQuestions, difficulty, questionType);
+    let generatedQuestions = [];
+    try {
+      const { generateQuestionsFromNote } = await import('@/lib/ai');
+      generatedQuestions = await generateQuestionsFromNote(textToProcess, numQuestions, difficulty, questionType, body.provider);
+    } catch (aiError) {
+      console.error('AI Generation failed, falling back to rule-based generation:', aiError);
+      generatedQuestions = generateSmartQuestions(textToProcess, numQuestions, difficulty, questionType);
+    }
 
     const savedQuestions = [];
     for (const question of generatedQuestions) {
       const questionId = uuidv4();
       const questionBankId = uuidv4();
       
-      // Save to generated_questions table
       const generatedStmt = db.prepare(`
         INSERT INTO generated_questions (
           id, school_id, lesson_note_id, question_text, option_a, option_b, 
@@ -94,7 +100,7 @@ export async function POST(request: NextRequest) {
         question.option_b || '',
         question.option_c || '',
         question.option_d || '',
-        questionType === 'multiple_choice' ? (question.correct_answer || 'A') : 'A', // Dummy 'A' for constraint
+        questionType === 'multiple_choice' ? (question.correct_answer || 'A') : 'A',
         question.difficulty,
         questionType,
         questionType === 'short_answer' ? question.correct_answer : null
@@ -187,6 +193,11 @@ function generateSmartQuestions(text: string, count: number, difficulty: string,
     .map(s => s.trim())
     .filter(s => s.length > 20 && s.length < 350);
 
+  // Extract keywords to use as plausible distractors
+  const allWords = text.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/);
+  const commonKeywords = allWords.filter(w => w.length > 5);
+  const uniqueKeywords = Array.from(new Set(commonKeywords));
+
   const questions: any[] = [];
   const usedSentences = new Set();
 
@@ -206,19 +217,27 @@ function generateSmartQuestions(text: string, count: number, difficulty: string,
         const definition = match[3] || match[2].trim();
         if (subject.split(' ').length <= 6) {
           if (type === 'multiple_choice') {
+            // Pick distractors from other keywords in the same text
+            const distractors = uniqueKeywords
+                .filter(w => w !== subject.toLowerCase() && !definition.toLowerCase().includes(w))
+                .sort(() => 0.5 - Math.random())
+                .slice(0, 3);
+
+            // Fill in placeholders if we don't have enough context-relevant words
+            while(distractors.length < 3) distractors.push("None of the above");
+
             questions.push({
-              question_text: `What does "${subject}" mean?`,
+              question_text: `Based on the lesson, what does "${subject}" mean?`,
               option_a: capitalize(definition),
-              option_b: "A secondary aspect of the topic",
-              option_c: "An unrelated concept mentioned previously",
-              option_d: "None of the above",
+              option_b: capitalize(distractors[0]),
+              option_c: capitalize(distractors[1]),
+              option_d: capitalize(distractors[2]),
               correct_answer: "A",
               difficulty
             });
           } else {
-            // Short Answer / Theory
             questions.push({
-              question_text: `Briefly define or explain "${subject}".`,
+              question_text: `Briefly define or explain "${subject}" as discussed in this lesson.`,
               option_a: '', option_b: '', option_c: '', option_d: '',
               correct_answer: definition,
               difficulty
@@ -231,7 +250,6 @@ function generateSmartQuestions(text: string, count: number, difficulty: string,
     }
   }
 
-  // Fallback / Extra questions
   if (questions.length < count) {
     for (const sentence of sentences) {
       if (questions.length >= count) break;
@@ -240,20 +258,31 @@ function generateSmartQuestions(text: string, count: number, difficulty: string,
       if (words.length > 10) {
         if (type === 'multiple_choice') {
           const keywordIndex = Math.floor(words.length / 2);
-          const keyword = words[keywordIndex].replace(/[,.;()]/g, '');
+          const keyword = words[keywordIndex].replace(/[,.;()]/g, '').toLowerCase();
+
           if (keyword.length > 4) {
             const maskedSentence = words.map((w, i) => i === keywordIndex ? '__________' : w).join(' ');
+
+            // Get similar length words from the text as distractors
+            const distractors = uniqueKeywords
+                .filter(w => w !== keyword && Math.abs(w.length - keyword.length) <= 3)
+                .sort(() => 0.5 - Math.random())
+                .slice(0, 3);
+
+            while(distractors.length < 3) distractors.push("unrelated term");
+
             questions.push({
               question_text: `Complete this sentence: "${maskedSentence}"`,
-              option_a: keyword,
-              option_b: "another", option_c: "different", option_d: "incorrect",
+              option_a: capitalize(keyword),
+              option_b: capitalize(distractors[0]),
+              option_c: capitalize(distractors[1]),
+              option_d: capitalize(distractors[2]),
               correct_answer: "A",
               difficulty
             });
             usedSentences.add(sentence);
           }
         } else {
-          // Theory: Question based on the whole sentence
           questions.push({
             question_text: `Explain the following statement from the notes: "${sentence}"`,
             option_a: '', option_b: '', option_c: '', option_d: '',

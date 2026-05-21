@@ -9,13 +9,20 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const schoolId = searchParams.get('schoolId') || session.schoolId;
-  const studentId = searchParams.get('studentId');
+  let studentId = searchParams.get('studentId');
   const classId = searchParams.get('classId');
   const sessionId = searchParams.get('sessionId');
   const term = searchParams.get('term');
   const subjectId = searchParams.get('subjectId');
 
   const db = getDb();
+
+  // Security check: Students can only see their own scores
+  if (session.role === 'student') {
+    const student = db.prepare('SELECT id FROM students WHERE user_id = ?').get(session.userId) as any;
+    if (!student) return NextResponse.json({ error: 'Student record not found' }, { status: 404 });
+    studentId = student.id;
+  }
   let query = `
     SELECT sc.*, s.name as subject_name, st.first_name, st.last_name, st.admission_number
     FROM scores sc

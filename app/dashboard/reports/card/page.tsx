@@ -134,13 +134,17 @@ function ReportCardContent() {
           <span className="text-gray-600 font-medium">{student.last_name}, {student.first_name} — Report Card</span>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => setEditComments(!editComments)} className="btn-secondary text-sm">
-            {editComments ? '👁 View Mode' : '✏️ Edit Comments'}
-          </button>
-          {editComments && (
-            <button onClick={() => { saveComments(1); saveComments(2); saveComments(3); }} disabled={saving} className="btn-success text-sm">
-              {saving ? 'Saving...' : '💾 Save Changes'}
-            </button>
+          {user?.role !== 'student' && (
+            <>
+              <button onClick={() => setEditComments(!editComments)} className="btn-secondary text-sm">
+                {editComments ? '👁 View Mode' : '✏️ Edit Comments'}
+              </button>
+              {editComments && (
+                <button onClick={() => { saveComments(1); saveComments(2); saveComments(3); }} disabled={saving} className="btn-success text-sm">
+                  {saving ? 'Saving...' : '💾 Save Changes'}
+                </button>
+              )}
+            </>
           )}
           <button onClick={handlePrint} className="btn-primary text-sm flex items-center gap-2">
             🖨️ Print / PDF

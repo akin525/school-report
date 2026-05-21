@@ -30,6 +30,11 @@ export default function ScoresPage() {
   const [maxExam, setMaxExam] = useState(60);
   const [maxWeekly, setMaxWeekly] = useState(10);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiImage, setAIImage] = useState<string | null>(null);
+  const [aiProcessing, setAIProcessing] = useState(false);
+  const [extractionMethod, setExtractionMethod] = useState<'ai' | 'local'>('ai');
+  const [aiProvider, setAIProvider] = useState<'gemini' | 'openai'>('openai');
   const [bulkData, setBulkData] = useState<any[]>([]);
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [bulkResults, setBulkResults] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
@@ -254,61 +259,63 @@ export default function ScoresPage() {
       wb.SheetNames.forEach(sheetName => {
         // Role-based filtering: Teachers can only upload for assigned subjects
         if (user?.role === 'teacher') {
-          const isAssigned = subjects.some(s => s.name.toLowerCase() === sheetName.toLowerCase());
-          if (!isAssigned) return; // Skip this sheet
+          const isAssigned = subjects.some((s: any) => {
+            const sanitizedSubName = s.name.replace(/[:\\/?*\[\]]/g, "_").substring(0, 31).toLowerCase();
+            return sanitizedSubName === sheetName.toLowerCase() || s.name.toLowerCase() === sheetName.toLowerCase();
+          });
+          if (!isAssigned) return;
         }
 
         const ws = wb.Sheets[sheetName];
+        if (!ws) return;
         const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
         
-        // Find header row (usually contains "Admission Number" or similar)
         let headerRowIndex = -1;
         for (let i = 0; i < Math.min(data.length, 20); i++) {
-          if (data[i]?.some(cell => cell?.toString().toLowerCase().includes('admission number'))) {
+          if (data[i]?.some((cell: any) => cell?.toString().toLowerCase().includes('admission number'))) {
             headerRowIndex = i;
             break;
           }
         }
 
-        if (headerRowIndex === -1) return; // Skip non-subject sheets
+        if (headerRowIndex === -1) return;
 
-        const headers = data[headerRowIndex].map(h => h?.toString().trim().toLowerCase() || '');
-        const admIdx = headers.findIndex(h => h.includes('admission number'));
+        const headers = data[headerRowIndex].map((h: any) => h?.toString().trim().toLowerCase() || '');
+        const admIdx = headers.findIndex((h: string) => h.includes('admission number'));
         
         if (admIdx === -1) return;
 
-        // Use fixed offsets based on the provided template structure
-        let ca1Idx = -1, ca2Idx = -1, examIdx = -1;
-        if (selectedTerm === '1') {
-          ca1Idx = admIdx + 1;
-          ca2Idx = admIdx + 2;
-          examIdx = admIdx + 4;
-        } else if (selectedTerm === '2') {
-          ca1Idx = admIdx + 8;
-          ca2Idx = admIdx + 9;
-          examIdx = admIdx + 11;
-        } else {
-          ca1Idx = admIdx + 15;
-          ca2Idx = admIdx + 16;
-          examIdx = admIdx + 18;
-        }
+        const termConfigs = [
+          { term: '1', ca1: admIdx + 1, ca2: admIdx + 2, exam: admIdx + 4 },
+          { term: '2', ca1: admIdx + 8, ca2: admIdx + 9, exam: admIdx + 11 },
+          { term: '3', ca1: admIdx + 15, ca2: admIdx + 16, exam: admIdx + 18 },
+        ];
 
-        // Process rows after header
         for (let i = headerRowIndex + 1; i < data.length; i++) {
           const row = data[i];
           if (!row) continue;
           
           const admNo = row[admIdx]?.toString().trim();
-          // Skip empty rows or placeholder rows (like SN 0)
           if (!admNo || admNo === '0' || admNo === '0.0' || admNo.toLowerCase() === 'admission number') continue;
 
-          allScores.push({
-            subject_name: sheetName,
-            admission_number: admNo,
-            ca1: parseFloat(row[ca1Idx]) || 0,
-            ca2: parseFloat(row[ca2Idx]) || 0,
-            exam: parseFloat(row[examIdx]) || 0
-          });
+          for (const t of termConfigs) {
+            const ca1 = row[t.ca1];
+            const ca2 = row[t.ca2];
+            const exam = row[t.exam];
+
+            if ((ca1 !== undefined && ca1 !== "") ||
+                (ca2 !== undefined && ca2 !== "") ||
+                (exam !== undefined && exam !== "")) {
+              allScores.push({
+                subject_name: sheetName,
+                admission_number: admNo,
+                term: t.term,
+                ca1: parseFloat(ca1 as string) || 0,
+                ca2: parseFloat(ca2 as string) || 0,
+                exam: parseFloat(exam as string) || 0
+              });
+            }
+          }
         }
       });
 
@@ -317,7 +324,65 @@ export default function ScoresPage() {
       setShowBulkModal(true);
     };
     reader.readAsBinaryString(file);
-    e.target.value = ''; // Reset input
+    e.target.value = '';
+  };
+
+  const downloadTemplate = () => {
+    if (!selectedClass) {
+      alert("Please select a class first");
+      return;
+    }
+
+    const cls = classes.find(c => c.id === selectedClass);
+    const wb = XLSX.utils.book_new();
+
+    subjects.forEach(sub => {
+      // Create a header row and a guidance row
+      const sheetData = [
+        ["SCHOOL NAME:", school?.name || "", "", "CLASS:", `${cls?.name} ${cls?.arm}` || "", "", "SUBJECT:", sub.name],
+        ["INSTRUCTIONS:", "Enter scores in the columns below. Do not change the SN or Admission Number columns.", "", "", "", "", "", ""],
+        ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["", "", "", "1ST TERM", "", "", "", "", "", "2ND TERM", "", "", "", "", "", "3RD TERM"],
+        ["SN", "Names of Pupils", "Admission Number", "CA1", "CA2", "TOTAL CA", "EXAM", "TOTAL", "RANK", "POS", "CA1", "CA2", "TOTAL CA", "EXAM", "TOTAL", "RANK", "POS", "CA1", "CA2", "TOTAL CA", "EXAM", "TOTAL", "RANK", "POS"]
+      ];
+
+      students.forEach((student, idx) => {
+        sheetData.push([
+          (idx + 1).toString(),
+          `${student.last_name}, ${student.first_name} ${student.middle_name}`.toUpperCase(),
+          student.admission_number || "",
+          "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
+        ]);
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+      // Merge cells for headers
+      ws['!merges'] = [
+        { s: { r: 0, c: 1 }, e: { r: 0, c: 2 } }, // School Name
+        { s: { r: 0, c: 4 }, e: { r: 0, c: 5 } }, // Class
+        { s: { r: 0, c: 7 }, e: { r: 0, c: 8 } }, // Subject
+        { s: { r: 1, c: 1 }, e: { r: 1, c: 7 } }, // Instructions
+        { s: { r: 3, c: 3 }, e: { r: 3, c: 9 } }, // 1st Term
+        { s: { r: 3, c: 10 }, e: { r: 3, c: 16 } }, // 2nd Term
+        { s: { r: 3, c: 17 }, e: { r: 3, c: 23 } }  // 3rd Term
+      ];
+
+      ws['!cols'] = [
+        { wch: 5 },  // SN
+        { wch: 35 }, // Names
+        { wch: 22 }, // Adm No
+        { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, // T1
+        { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, // T2
+        { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 8 }  // T3
+      ];
+
+      // Sanitize sheet name: Excel forbidden characters: \ / ? * [ ] :
+      const sanitizedSheetName = sub.name.replace(/[:\\/?*\[\]]/g, "_").substring(0, 31);
+      XLSX.utils.book_append_sheet(wb, ws, sanitizedSheetName);
+    });
+
+    XLSX.writeFile(wb, `Score_Entry_Template_${cls?.name || 'Class'}_${cls?.arm || ''}.xlsx`);
   };
 
   const processBulkUpload = async () => {
@@ -351,6 +416,120 @@ export default function ScoresPage() {
     setBulkProcessing(false);
   };
 
+  const handleAIImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAIImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const processAIImage = async () => {
+    if (!aiImage || !selectedSubject || !selectedTerm) {
+      alert("Please select a subject and term first!");
+      return;
+    }
+
+    if (extractionMethod === 'local') {
+      alert("Local OCR is being initialized... Please note this works best on high-contrast black and white text and might fail on complex grids.");
+      processLocalOCR();
+      return;
+    }
+
+    setAIProcessing(true);
+    try {
+      const res = await fetch('/api/scores/ai-parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: aiImage,
+          subjectId: selectedSubject,
+          term: selectedTerm,
+          schoolId,
+          provider: aiProvider
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.scores) {
+        // Map subject_name for bulk uploader compatibility
+        const subName = subjects.find(s => s.id === selectedSubject)?.name || 'Subject';
+        const mappedScores = data.scores.map((s: any) => ({
+            ...s,
+            subject_name: subName,
+            term: selectedTerm
+        }));
+        setBulkData(mappedScores);
+        setShowAIModal(false);
+        setShowBulkModal(true);
+      } else {
+        alert("AI Parsing failed: " + (data.error || "Unknown error"));
+      }
+    } catch (e) {
+      alert("Error processing image");
+    } finally {
+      setAIProcessing(false);
+    }
+  };
+
+  const processLocalOCR = async () => {
+    setAIProcessing(true);
+    try {
+      // Import tesseract via CDN if not available
+      if (!(window as any).Tesseract) {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        document.head.appendChild(script);
+        await new Promise((resolve) => { script.onload = resolve; });
+      }
+
+      const { Tesseract } = window as any;
+      const worker = await Tesseract.createWorker('eng');
+      const { data: { text } } = await worker.recognize(aiImage);
+      await worker.terminate();
+
+      // Simple heuristic parser for Tesseract output
+      // This is a basic attempt to find admission numbers and scores
+      const lines = text.split('\n').filter((l: string) => l.trim().length > 5);
+      const parsedScores: any[] = [];
+      const subName = subjects.find(s => s.id === selectedSubject)?.name || 'Subject';
+
+      lines.forEach((line: string) => {
+        // Look for HHC/... pattern for Hallmark Heights College
+        const admMatch = line.match(/HHC\/[^\s]+/i);
+        if (admMatch) {
+          const admNo = admMatch[0];
+          // Look for numbers after the admission number
+          const numbers = line.substring(line.indexOf(admNo) + admNo.length).match(/\d+(\.\d+)?/g);
+          if (numbers && numbers.length >= 2) {
+            parsedScores.push({
+              admission_number: admNo,
+              ca1: parseFloat(numbers[0]) || 0,
+              ca2: parseFloat(numbers[1]) || 0,
+              exam: numbers[2] ? parseFloat(numbers[2]) : 0,
+              subject_name: subName
+            });
+          }
+        }
+      });
+
+      if (parsedScores.length > 0) {
+        setBulkData(parsedScores);
+        setShowAIModal(false);
+        setShowBulkModal(true);
+      } else {
+        alert("Local OCR couldn't detect a table structure. Please try the AI method or upload a clearer image.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Local OCR failed to load.");
+    } finally {
+      setAIProcessing(false);
+    }
+  };
+
   const displayStudents = mode === 'student' && selectedStudent
     ? students.filter(s => s.id === selectedStudent)
     : students;
@@ -372,10 +551,26 @@ export default function ScoresPage() {
             </button>
           )}
           {selectedClass && selectedSession && (
-            <label className="btn-secondary text-sm flex items-center gap-2 cursor-pointer shadow-sm">
-              📁 Bulk Result Upload
-              <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleBulkExcel} />
-            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={downloadTemplate}
+                className="btn-secondary text-sm flex items-center gap-2 shadow-sm border-blue-200 text-blue-700 hover:bg-blue-50"
+              >
+                📥 Download Template
+              </button>
+              <label className="btn-secondary text-sm flex items-center gap-2 cursor-pointer shadow-sm">
+                📁 Bulk Excel
+                <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleBulkExcel} />
+              </label>
+              {school?.ai_enabled === 1 && (
+                <button
+                  onClick={() => setShowAIModal(true)}
+                  className="btn-primary text-sm flex items-center gap-2 shadow-sm bg-purple-700 hover:bg-purple-800"
+                >
+                  🤖 AI Image Upload
+                </button>
+              )}
+            </div>
           )}
           {saveMsg && <div className="bg-green-100 border border-green-300 text-green-800 px-4 py-2 rounded-lg text-sm font-medium animate-fade-in">✓ {saveMsg}</div>}
         </div>
@@ -655,19 +850,125 @@ export default function ScoresPage() {
         </div>
       )}
 
+      {/* AI Image Modal */}
+      {showAIModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="bg-purple-800 text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-lg">🤖 AI Score Extraction</h3>
+              <button onClick={() => setShowAIModal(false)} className="text-2xl leading-none">×</button>
+            </div>
+            <div className="p-6 space-y-6">
+              <p className="text-sm text-gray-600">
+                Upload a clear photo or scan of your record sheet. The system will extract students and scores for the
+                <strong> {subjects.find(s => s.id === selectedSubject)?.name || 'selected subject'} </strong>
+                ({selectedTerm === '1' ? '1st' : selectedTerm === '2' ? '2nd' : '3rd'} Term).
+              </p>
+
+              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border">
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-gray-400 block mb-2">Extraction Method</label>
+                  <div className="flex bg-white rounded-lg p-1 border">
+                    <button
+                      onClick={() => setExtractionMethod('ai')}
+                      className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${extractionMethod === 'ai' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+                    >
+                      🤖 Smart AI
+                    </button>
+                    <button
+                      onClick={() => setExtractionMethod('local')}
+                      className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${extractionMethod === 'local' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+                    >
+                      📵 Local OCR
+                    </button>
+                  </div>
+                </div>
+
+                {extractionMethod === 'ai' && (
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-gray-400 block mb-2">AI Provider</label>
+                    <div className="flex bg-white rounded-lg p-1 border">
+                      <button
+                        onClick={() => setAIProvider('openai')}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${aiProvider === 'openai' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+                      >
+                        ChatGPT
+                      </button>
+                      <button
+                        onClick={() => setAIProvider('gemini')}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${aiProvider === 'gemini' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+                      >
+                        Gemini
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {!aiImage ? (
+                <div className="border-2 border-dashed border-purple-200 rounded-xl p-12 text-center hover:bg-purple-50 transition-colors cursor-pointer relative">
+                  <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleAIImageUpload} />
+                  <div className="text-4xl mb-2">📸</div>
+                  <p className="text-sm font-medium text-purple-700">Click to upload or drag and drop</p>
+                  <p className="text-xs text-gray-400 mt-1">PNG, JPG or WebP</p>
+                </div>
+              ) : (
+                <div className="relative group">
+                  <img src={aiImage} alt="Preview" className="w-full max-h-64 object-contain rounded-lg border" />
+                  <button
+                    onClick={() => setAIImage(null)}
+                    className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+
+              {aiImage && (
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                  <h4 className="text-xs font-bold text-blue-800 uppercase mb-2 flex items-center gap-1">
+                    <span>ℹ️</span> Tips for better results:
+                  </h4>
+                  <ul className="text-[10px] text-blue-700 space-y-1 list-disc ml-4">
+                    <li>Ensure the image is well-lit and not blurry.</li>
+                    <li>The names and admission numbers should be clearly visible.</li>
+                    <li>Avoid shadows or glare on the score columns.</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t">
+              <button onClick={() => setShowAIModal(false)} className="btn-secondary" disabled={aiProcessing}>Cancel</button>
+              <button
+                onClick={processAIImage}
+                disabled={aiProcessing || !aiImage}
+                className="btn-primary bg-purple-700 hover:bg-purple-800 flex items-center gap-2"
+              >
+                {aiProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Processing...
+                  </>
+                ) : '✨ Extract Scores'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bulk Scores Modal */}
       {showBulkModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-blue-800 text-white px-6 py-4 flex items-center justify-between">
-              <h3 className="font-bold text-lg">Bulk Score Upload ({selectedTerm === '1' ? '1st' : selectedTerm === '2' ? '2nd' : '3rd'} Term)</h3>
+              <h3 className="font-bold text-lg">Bulk Score Upload</h3>
               <button onClick={() => setShowBulkModal(false)} className="text-2xl leading-none">×</button>
             </div>
             <div className="p-6 overflow-auto flex-1">
               {!bulkResults ? (
                 <div className="space-y-4">
                   <p className="text-sm text-gray-600">
-                    The system has detected <strong>{bulkData.length}</strong> scores across different subjects from your Excel file for the selected term.
+                    The system has detected <strong>{bulkData.length}</strong> scores across different subjects and terms from your Excel file.
                     <br/><br/>
                     <span className="text-red-600 font-bold">* Subjects in Excel must match your system subject names exactly.</span>
                   </p>
@@ -677,6 +978,7 @@ export default function ScoresPage() {
                         <tr>
                           <th className="p-2 border text-left">Subject (Sheet Name)</th>
                           <th className="p-2 border text-left">Adm No.</th>
+                          <th className="p-2 border text-center">Term</th>
                           <th className="p-2 border text-center">CA1</th>
                           <th className="p-2 border text-center">CA2</th>
                           <th className="p-2 border text-center">Exam</th>
@@ -687,6 +989,7 @@ export default function ScoresPage() {
                           <tr key={idx} className="hover:bg-gray-50">
                             <td className="p-2 border">{s.subject_name}</td>
                             <td className="p-2 border font-mono">{s.admission_number}</td>
+                            <td className="p-2 border text-center">{s.term}</td>
                             <td className="p-2 border text-center">{s.ca1}</td>
                             <td className="p-2 border text-center">{s.ca2}</td>
                             <td className="p-2 border text-center">{s.exam}</td>

@@ -13,6 +13,7 @@ export async function GET() {
   
   let school = null;
   let teacher = null;
+  let student = null;
   let grading = null;
   if (user.school_id) {
     school = db.prepare('SELECT * FROM schools WHERE id = ?').get(user.school_id) as any;
@@ -20,7 +21,12 @@ export async function GET() {
 
     // Always try to find a teacher record for the user, regardless of role
     teacher = db.prepare('SELECT * FROM teachers WHERE user_id = ? AND school_id = ?').get(user.id, user.school_id) as any;
+
+    // If student, find student record
+    if (user.role === 'student') {
+      student = db.prepare('SELECT * FROM students WHERE user_id = ? AND school_id = ?').get(user.id, user.school_id) as any;
+    }
   }
   
-  return NextResponse.json({ user, school, teacher, grading });
+  return NextResponse.json({ user, school, teacher, student, grading });
 }

@@ -11,17 +11,23 @@ interface School {
 }
 
 const navItems = [
-  { href: '/dashboard', icon: '🏠', label: 'Dashboard', roles: ['superadmin','school_admin','teacher'] },
+  { href: '/dashboard', icon: '🏠', label: 'Dashboard', roles: ['superadmin','school_admin','teacher','student'] },
+  { href: '/dashboard/profile', icon: '👤', label: 'My Profile', roles: ['superadmin','school_admin','teacher','student'] },
+  { href: '/dashboard/announcements', icon: '📢', label: 'Announcements', roles: ['superadmin','school_admin','teacher','student'] },
+  { href: '/dashboard/timetable', icon: '📅', label: 'Timetable', roles: ['superadmin','school_admin','teacher','student'] },
   { href: '/dashboard/schools', icon: '🏫', label: 'Schools', roles: ['superadmin'] },
   { href: '/dashboard/sessions', icon: '📅', label: 'Sessions', roles: ['superadmin','school_admin'] },
   { href: '/dashboard/classes', icon: '🏛️', label: 'Classes', roles: ['superadmin','school_admin'] },
   { href: '/dashboard/subjects', icon: '📚', label: 'Subjects', roles: ['superadmin','school_admin'] },
   { href: '/dashboard/teachers', icon: '👨‍🏫', label: 'Teachers', roles: ['superadmin','school_admin'] },
   { href: '/dashboard/students', icon: '👨‍🎓', label: 'Students', roles: ['superadmin','school_admin','teacher'] },
-  { href: '/dashboard/lesson-notes', icon: '📖', label: 'Lesson Notes', roles: ['superadmin','school_admin','teacher'] },
+  { href: '/dashboard/lesson-notes', icon: '📖', label: 'Lesson Notes', roles: ['superadmin','school_admin','teacher','student'] },
+  { href: '/dashboard/exams', icon: '📝', label: 'Online Exams', roles: ['superadmin','school_admin','teacher','student'] },
+  { href: '/dashboard/quizzes', icon: '📝', label: 'Practice Quizzes', roles: ['student'] },
+  { href: '/dashboard/attendance', icon: '🗓️', label: 'Attendance', roles: ['superadmin','school_admin','teacher','student'] },
   { href: '/dashboard/question-bank', icon: '📝', label: 'Question Bank', roles: ['superadmin','school_admin','teacher'] },
   { href: '/dashboard/scores', icon: '📝', label: 'Enter Scores', roles: ['superadmin','school_admin','teacher'] },
-  { href: '/dashboard/reports', icon: '📊', label: 'Reports', roles: ['superadmin','school_admin','teacher'] },
+  { href: '/dashboard/reports', icon: '📊', label: 'Reports', roles: ['superadmin','school_admin','teacher','student'] },
   { href: '/dashboard/settings', icon: '⚙️', label: 'Settings', roles: ['superadmin','school_admin'] },
 ];
 
@@ -33,7 +39,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
     fetch('/api/auth/me').then(r => {
       if (!r.ok) { router.push('/login'); return null; }
       return r.json();
@@ -41,7 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (data) { setUser(data.user); setSchool(data.school); }
       setLoading(false);
     });
-  }, []);
+  }, [router]);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -50,7 +59,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const filteredNav = navItems.filter(item => user && item.roles.includes(user.role));
 
-  if (loading) {
+  if (!mounted || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">

@@ -62,7 +62,7 @@ function initializeSchema(db: Database.Database) {
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('superadmin','school_admin','teacher')),
+      role TEXT NOT NULL CHECK(role IN ('superadmin','school_admin','teacher','student')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
     );
@@ -382,10 +382,128 @@ function initializeSchema(db: Database.Database) {
   `);
 
   // Migrations for newer columns in question tables
+  addColumn('students', 'user_id', 'TEXT');
+  addColumn('students', 'email', 'TEXT');
+
+  // Fix users table constraint by recreating it if 'student' role is missing
+  try {
+    const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get() as any;
+    if (tableInfo && !tableInfo.sql.includes("'student'")) {
+      console.log("Migrating users table to support student role...");
+      db.exec(`
+        PRAGMA foreign_keys=OFF;
+        BEGIN TRANSACTION;
+        CREATE TABLE users_new (
+          id TEXT PRIMARY KEY,
+          school_id TEXT,
+          name TEXT NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          role TEXT NOT NULL CHECK(role IN ('superadmin','school_admin','teacher','student')),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
+        );
+        INSERT INTO users_new (id, school_id, name, email, password_hash, role, created_at)
+        SELECT id, school_id, name, email, password_hash, role, created_at FROM users;
+        DROP TABLE users;
+        ALTER TABLE users_new RENAME TO users;
+        COMMIT;
+        PRAGMA foreign_keys=ON;
+      `);
+    }
+  } catch (e) {
+    console.error("Migration failed:", e);
+  }
+
   addColumn('generated_questions', 'question_type', "TEXT DEFAULT 'multiple_choice'");
   addColumn('generated_questions', 'correct_answer_text', 'TEXT');
   addColumn('generated_questions', 'note', 'TEXT');
   addColumn('question_bank', 'note', 'TEXT');
+
+  // AI Settings for Schools
+  addColumn('schools', 'openai_api_key', 'TEXT');
+  addColumn('schools', 'gemini_api_key', 'TEXT');
+  addColumn('schools', 'ai_enabled', 'INTEGER DEFAULT 1');
+
+  db.exec(`
+    -- Announcements
+    CREATE TABLE IF NOT EXISTS announcements (
+      id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      target_role TEXT DEFAULT 'all',
+      target_class_id TEXT,
+      created_by TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
+      FOREIGN KEY (target_class_id) REFERENCES classes(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- Timetable
+    CREATE TABLE IF NOT EXISTS timetable (
+      id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL,
+      class_id TEXT NOT NULL,
+      day_of_week INTEGER NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      teacher_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
+      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+      FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+      FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE SET NULL
+    );
+
+    -- Exams (Timed Sessions)
+    CREATE TABLE IF NOT EXISTS exams (
+      id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      class_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      term INTEGER NOT NULL,
+      start_time DATETIME NOT NULL,
+      end_time DATETIME NOT NULL,
+      duration_minutes INTEGER NOT NULL,
+      total_marks INTEGER NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
+      FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- Exam Submissions
+    CREATE TABLE IF NOT EXISTS exam_submissions (
+      id TEXT PRIMARY KEY,
+      exam_id TEXT NOT NULL,
+      student_id TEXT NOT NULL,
+      score REAL,
+      submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      answers TEXT, -- JSON string of answers
+      FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
+      FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+      UNIQUE(exam_id, student_id)
+    );
+
+    -- Exam Questions Mapping
+    CREATE TABLE IF NOT EXISTS exam_questions (
+      id TEXT PRIMARY KEY,
+      exam_id TEXT NOT NULL,
+      question_id TEXT NOT NULL,
+      marks INTEGER DEFAULT 1,
+      order_index INTEGER,
+      FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
+      FOREIGN KEY (question_id) REFERENCES question_bank(id) ON DELETE CASCADE
+    );
+  `);
 }
 
 export default getDb;

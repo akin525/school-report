@@ -10,7 +10,17 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+    // Search in users table (email/username)
+    let user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+
+    // If not found, check if it's an admission number in the students table
+    if (!user) {
+      const student = db.prepare('SELECT user_id FROM students WHERE admission_number = ?').get(email) as any;
+      if (student?.user_id) {
+        user = db.prepare('SELECT * FROM users WHERE id = ?').get(student.user_id) as any;
+      }
+    }
+
     if (!user) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }

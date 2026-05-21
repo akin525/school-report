@@ -35,8 +35,16 @@ export async function POST(req: NextRequest) {
     // Check for student existence by admission number and get their ID
     const studentStmt = db.prepare('SELECT id, class_id FROM students WHERE admission_number = ? AND school_id = ?');
     
-    // Check for subject existence by name
-    const subjectStmt = db.prepare('SELECT id FROM subjects WHERE name = ? AND school_id = ?');
+    // Fetch all subjects for fuzzy name matching (handling Excel sanitization)
+    const allSubjects = db.prepare('SELECT id, name FROM subjects WHERE school_id = ?').all(sId) as any[];
+    const subjectLookup = new Map<string, any>();
+    allSubjects.forEach(s => {
+      // Store by original name
+      subjectLookup.set(s.name.toLowerCase(), s);
+      // Store by sanitized name (same logic as template generator)
+      const sanitized = s.name.replace(/[:\\/?*\[\]]/g, "_").substring(0, 31).toLowerCase();
+      subjectLookup.set(sanitized, s);
+    });
 
     // Check for teacher assignments
     const assignmentStmt = db.prepare(`
@@ -75,7 +83,7 @@ export async function POST(req: NextRequest) {
           }
 
           // 2. Get subject
-          const subject = subjectStmt.get(item.subject_name, sId) as any;
+          const subject = subjectLookup.get(item.subject_name.toLowerCase());
           if (!subject) {
             results.failed++;
             results.errors.push(`Subject "${item.subject_name}" not found.`);
@@ -107,7 +115,7 @@ export async function POST(req: NextRequest) {
             student.id,
             student.class_id,
             sessionId,
-            parseInt(term),
+            parseInt(item.term || term),
             subject.id,
             item.ca1 || 0,
             item.ca2 || 0,
