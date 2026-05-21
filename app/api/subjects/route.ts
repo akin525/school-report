@@ -14,6 +14,19 @@ export async function GET(req: NextRequest) {
 
   const db = getDb();
 
+  // Security check: Students should only see subjects for their own class
+  if (session.role === 'student') {
+    const student = db.prepare('SELECT class_id FROM students WHERE user_id = ?').get(session.userId) as any;
+    if (!student) return NextResponse.json([]);
+    const subjects = db.prepare(`
+      SELECT s.* FROM subjects s
+      JOIN class_subjects cs ON cs.subject_id = s.id
+      WHERE cs.class_id = ? AND s.school_id = ?
+      ORDER BY s.name
+    `).all(student.class_id, schoolId);
+    return NextResponse.json(subjects);
+  }
+
   if (classId) {
     const subjects = db.prepare(`
       SELECT s.* FROM subjects s

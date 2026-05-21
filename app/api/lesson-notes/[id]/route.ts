@@ -14,6 +14,16 @@ export async function GET(
 
     const { id } = await params;
     const db = getDb();
+
+    // Security check for students
+    if (session.role === 'student') {
+      const student = db.prepare('SELECT class_id FROM students WHERE user_id = ?').get(session.userId) as any;
+      const lessonNote = db.prepare('SELECT class_id FROM lesson_notes WHERE id = ?').get(id) as any;
+      if (!student || !lessonNote || student.class_id !== lessonNote.class_id) {
+        return NextResponse.json({ error: 'Access denied: This lesson note is not for your class' }, { status: 403 });
+      }
+    }
+
     const lessonNote = db.prepare(`
       SELECT ln.*, t.name as teacher_name, s.name as subject_name, c.name as class_name, 
              c.arm as class_arm, sess.name as session_name

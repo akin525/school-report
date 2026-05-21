@@ -16,7 +16,8 @@ export default function StudentsPage() {
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({
     first_name: '', middle_name: '', last_name: '', class_id: '',
-    date_of_birth: '', gender: '', admission_number: '', admission_year: '', photo_url: ''
+    date_of_birth: '', gender: '', admission_number: '', admission_year: '', photo_url: '',
+    email: '', password: ''
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -26,6 +27,12 @@ export default function StudentsPage() {
   const [showBulkImageModal, setShowBulkImageModal] = useState(false);
   const [bulkImageFiles, setBulkImageFiles] = useState<File[]>([]);
   const [bulkImageResults, setBulkImageStatus] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
+  const [generatingLogins, setGeneratingLogins] = useState(false);
+  const [showAIAnalysisModal, setShowAIAnalysisModal] = useState(false);
+  const [selectedStudentForAI, setSelectedStudentForAI] = useState<any>(null);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState('');
+  const [loadingAIAnalysis, setLoadingAIAnalysis] = useState(false);
+  const [aiProvider, setAIProvider] = useState<'gemini' | 'openai'>('openai');
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
@@ -44,22 +51,43 @@ export default function StudentsPage() {
 
   const loadData = async (sid: string) => {
     setLoading(true);
-    const [studRes, clsRes] = await Promise.all([
-      fetch(`/api/students?schoolId=${sid}`),
-      fetch(`/api/classes?schoolId=${sid}`)
-    ]);
-    setStudents(await studRes.json());
-    setClasses(await clsRes.json());
+    try {
+      const [studRes, clsRes] = await Promise.all([
+        fetch(`/api/students?schoolId=${sid}`),
+        fetch(`/api/classes?schoolId=${sid}`)
+      ]);
+      const studData = await studRes.json();
+      const clsData = await clsRes.json();
+
+      setStudents(Array.isArray(studData) ? studData : []);
+      setClasses(Array.isArray(clsData) ? clsData : []);
+    } catch (e) {
+      console.error(e);
+      setStudents([]);
+      setClasses([]);
+    }
     setLoading(false);
   };
 
   const openModal = (student?: any) => {
     if (student) {
       setEditing(student);
-      setForm({ first_name: student.first_name, middle_name: student.middle_name || '', last_name: student.last_name, class_id: student.class_id || '', date_of_birth: student.date_of_birth || '', gender: student.gender || '', admission_number: student.admission_number || '', admission_year: student.admission_year || '', photo_url: student.photo_url || '' });
+      setForm({
+        first_name: student.first_name,
+        middle_name: student.middle_name || '',
+        last_name: student.last_name,
+        class_id: student.class_id || '',
+        date_of_birth: student.date_of_birth || '',
+        gender: student.gender || '',
+        admission_number: student.admission_number || '',
+        admission_year: student.admission_year || '',
+        photo_url: student.photo_url || '',
+        email: student.email || '',
+        password: ''
+      });
     } else {
       setEditing(null);
-      setForm({ first_name: '', middle_name: '', last_name: '', class_id: '', date_of_birth: '', gender: '', admission_number: '', admission_year: '', photo_url: '' });
+      setForm({ first_name: '', middle_name: '', last_name: '', class_id: '', date_of_birth: '', gender: '', admission_number: '', admission_year: '', photo_url: '', email: '', password: '' });
     }
     setShowModal(true);
   };
@@ -231,6 +259,50 @@ export default function StudentsPage() {
     setBulkProcessing(false);
   };
 
+  const generateMissingLogins = async () => {
+    if (!confirm('This will generate login credentials for all students who don\'t have them yet. \n\nUsername: Admission Number \nDefault Password: password123 \n\nProceed?')) return;
+
+    setGeneratingLogins(true);
+    try {
+      const res = await fetch('/api/students/generate-logins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schoolId })
+      });
+      const result = await res.json();
+      if (res.ok) {
+        alert(result.message + (result.count > 0 ? `\n\nDefault Password for all: ${result.defaultPassword}` : ''));
+        loadData(schoolId);
+      } else {
+        alert('Error: ' + result.error);
+      }
+    } catch (e) {
+      alert('Action failed');
+    } finally {
+      setGeneratingLogins(false);
+    }
+  };
+
+  const runAIAnalysis = async (student: any) => {
+    setSelectedStudentForAI(student);
+    setShowAIAnalysisModal(true);
+    setAiAnalysisResult('');
+    setLoadingAIAnalysis(true);
+    try {
+      const res = await fetch(`/api/students/ai-analysis?studentId=${student.id}&provider=${aiProvider}`);
+      const data = await res.json();
+      if (res.ok) {
+        setAiAnalysisResult(data.analysis);
+      } else {
+        setAiAnalysisResult("Failed to perform AI analysis: " + data.error);
+      }
+    } catch (e) {
+      setAiAnalysisResult("Error connecting to AI service.");
+    } finally {
+      setLoadingAIAnalysis(false);
+    }
+  };
+
   const filtered = students.filter(s => {
     const matchClass = !filterClass || s.class_id === filterClass;
     const matchSearch = !search || `${s.first_name} ${s.last_name} ${s.admission_number}`.toLowerCase().includes(search.toLowerCase());
@@ -256,6 +328,9 @@ export default function StudentsPage() {
                   Upload CSV
                   <input type="file" accept=".csv" className="hidden" onChange={handleBulkCsv} />
                 </label>
+                <button onClick={generateMissingLogins} disabled={generatingLogins} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm border-b text-blue-700 font-medium">
+                  {generatingLogins ? 'Generating...' : '🔑 Generate Missing Logins'}
+                </button>
                 <label className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm block cursor-pointer">
                   Upload Images
                   <input type="file" accept="image/*" multiple className="hidden" onChange={handleBulkImages} />
@@ -327,6 +402,7 @@ export default function StudentsPage() {
                       <td className="table-cell">
                         <div className="flex gap-2">
                           <button onClick={() => openModal(s)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
+                          <button onClick={() => runAIAnalysis(s)} className="text-purple-600 hover:text-purple-800 text-xs font-medium">✨ AI Insight</button>
                           <button onClick={() => deleteStudent(s.id)} className="text-red-600 hover:text-red-800 text-xs font-medium">Delete</button>
                         </div>
                       </td>
@@ -388,7 +464,21 @@ export default function StudentsPage() {
                   <label className="label">Date of Birth</label>
                   <input type="date" className="input" value={form.date_of_birth} onChange={e => setForm({...form, date_of_birth: e.target.value})} />
                 </div>
-                <div>
+                <div className="col-span-2 border-t pt-4 mt-2">
+                  <h4 className="font-bold text-sm text-blue-800 mb-3">Login Credentials</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Email / Username</label>
+                      <input className="input" placeholder="student@school.com" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="label">Password {editing && '(leave blank to keep)'}</label>
+                      <input type="password" title="Set a password for the student to login" className="input" placeholder="••••••••" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-2 italic">Students can use these credentials to access their results and lesson notes.</p>
+                </div>
+                <div className="col-span-2">
                   <label className="label">Student Picture</label>
                   <div className="flex flex-col gap-2">
                     {form.photo_url && (
@@ -544,6 +634,57 @@ export default function StudentsPage() {
                 </>
               ) : (
                 <button onClick={() => setShowBulkImageModal(false)} className="btn-primary">Close</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* AI Analysis Modal */}
+      {showAIAnalysisModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-gradient-to-r from-purple-800 to-indigo-900 p-6 text-white flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <span>✨</span> Academic Performance Insight
+                </h2>
+                <p className="text-purple-200 text-sm">
+                  {selectedStudentForAI?.first_name} {selectedStudentForAI?.last_name}
+                </p>
+              </div>
+              <div className="flex items-center gap-4">
+                <select
+                  className="bg-purple-900/50 border border-purple-400/30 rounded-lg text-xs p-1 text-white outline-none"
+                  value={aiProvider}
+                  onChange={(e: any) => setAIProvider(e.target.value)}
+                >
+                  <option value="openai">ChatGPT</option>
+                  <option value="gemini">Gemini</option>
+                </select>
+                <button onClick={() => setShowAIAnalysisModal(false)} className="text-white hover:text-purple-200 text-2xl font-bold">&times;</button>
+              </div>
+            </div>
+            <div className="p-8 max-h-[70vh] overflow-y-auto">
+              {loadingAIAnalysis ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                  <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-gray-600 font-medium animate-pulse">AI is analyzing academic records...</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div
+                    className="prose prose-purple max-w-none text-gray-700 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: aiAnalysisResult }}
+                  />
+                  <div className="pt-6 border-t flex justify-end">
+                    <button
+                      onClick={() => setShowAIAnalysisModal(false)}
+                      className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-all"
+                    >
+                      Close Analysis
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

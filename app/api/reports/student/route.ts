@@ -12,6 +12,15 @@ export async function GET(req: NextRequest) {
   const sessionId = searchParams.get('sessionId');
   const schoolId = searchParams.get('schoolId') || session.schoolId;
 
+  // Security check: Students can only view their own report card
+  if (session.role === 'student') {
+    const db = getDb();
+    const studentUser = db.prepare('SELECT id FROM students WHERE user_id = ?').get(session.userId) as any;
+    if (!studentUser || studentUser.id !== studentId) {
+      return NextResponse.json({ error: 'Unauthorized: You can only view your own report card' }, { status: 403 });
+    }
+  }
+
   if (!studentId || !sessionId) {
     return NextResponse.json({ error: 'studentId and sessionId required' }, { status: 400 });
   }

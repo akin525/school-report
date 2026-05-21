@@ -12,6 +12,15 @@ export async function GET(req: NextRequest) {
   const category = searchParams.get('category');
 
   const db = getDb();
+
+  // Security check: Students should only see their own class
+  if (session.role === 'student') {
+    const student = db.prepare('SELECT class_id FROM students WHERE user_id = ?').get(session.userId) as any;
+    if (!student) return NextResponse.json([]);
+    const myClass = db.prepare('SELECT * FROM classes WHERE id = ?').get(student.class_id);
+    return NextResponse.json(myClass ? [myClass] : []);
+  }
+
   let query = 'SELECT * FROM classes WHERE school_id = ?';
   const params: any[] = [schoolId];
   if (category) { query += ' AND category = ?'; params.push(category); }

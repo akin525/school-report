@@ -26,7 +26,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       name, nursery_name, primary_name, secondary_name, address, phone, email, website, logo_url, motto, 
       nursery_max_ca1, nursery_max_ca2, nursery_max_exam, nursery_max_weekly,
       primary_max_ca1, primary_max_ca2, primary_max_exam, primary_max_weekly,
-      secondary_max_ca1, secondary_max_ca2, secondary_max_exam, secondary_max_weekly 
+      secondary_max_ca1, secondary_max_ca2, secondary_max_exam, secondary_max_weekly,
+      openai_api_key, gemini_api_key, ai_enabled
     } = await req.json();
     
     const db = getDb();
@@ -35,13 +36,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         name=?, nursery_name=?, primary_name=?, secondary_name=?, address=?, phone=?, email=?, website=?, logo_url=?, motto=?, 
         nursery_max_ca1=?, nursery_max_ca2=?, nursery_max_exam=?, nursery_max_weekly=?,
         primary_max_ca1=?, primary_max_ca2=?, primary_max_exam=?, primary_max_weekly=?,
-        secondary_max_ca1=?, secondary_max_ca2=?, secondary_max_exam=?, secondary_max_weekly=?
+        secondary_max_ca1=?, secondary_max_ca2=?, secondary_max_exam=?, secondary_max_weekly=?,
+        openai_api_key=?, gemini_api_key=?, ai_enabled=?
       WHERE id=?
     `).run(
       name, nursery_name || '', primary_name || '', secondary_name || '', address || '', phone || '', email || '', website || '', logo_url || '', motto || '', 
       nursery_max_ca1 ?? 20, nursery_max_ca2 ?? 20, nursery_max_exam ?? 60, nursery_max_weekly ?? 10,
       primary_max_ca1 ?? 20, primary_max_ca2 ?? 20, primary_max_exam ?? 60, primary_max_weekly ?? 10,
       secondary_max_ca1 ?? 20, secondary_max_ca2 ?? 20, secondary_max_exam ?? 60, secondary_max_weekly ?? 10,
+      openai_api_key ?? null, gemini_api_key ?? null, ai_enabled ?? 1,
       id
     );
 

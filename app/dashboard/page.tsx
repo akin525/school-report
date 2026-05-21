@@ -39,7 +39,20 @@ export default function DashboardPage() {
         const [students, teachers, classes, subjects, sessions] = await Promise.all([
           studRes.json(), teachRes.json(), classRes.json(), subRes.json(), sessRes.json()
         ]);
-        setStats({ students: students.length, teachers: teachers.length, classes: classes.length, subjects: subjects.length });
+        setStats({
+          students: Array.isArray(students) ? students.length : 0,
+          teachers: Array.isArray(teachers) ? teachers.length : 0,
+          classes: Array.isArray(classes) ? classes.length : 0,
+          subjects: Array.isArray(subjects) ? subjects.length : 0
+        });
+
+        // If student, fetch their specific class subjects
+        if (meData.user.role === 'student' && meData.student?.class_id) {
+          fetch(`/api/subjects?classId=${meData.student.class_id}`)
+            .then(r => r.json())
+            .then(data => setStats(prev => ({ ...prev, subjects: data.length })));
+        }
+
         setCurrentSession(sessions.find((s: any) => s.is_current) || sessions[0]);
       } else if (meData.user.role === 'superadmin') {
         const schoolsRes = await fetch('/api/schools');
@@ -62,6 +75,7 @@ export default function DashboardPage() {
     { label: 'Total Teachers', value: stats.teachers, icon: '👨‍🏫', color: 'green', href: '/dashboard/teachers', roles: ['superadmin', 'school_admin'] },
     { label: 'Classes', value: stats.classes, icon: '🏛️', color: 'purple', href: '/dashboard/classes', roles: ['superadmin', 'school_admin'] },
     { label: 'Subjects', value: stats.subjects, icon: '📚', color: 'orange', href: '/dashboard/subjects', roles: ['superadmin', 'school_admin'] },
+    { label: 'My Lesson Notes', value: stats.subjects, icon: '📖', color: 'purple', href: '/dashboard/lesson-notes', roles: ['student'] },
   ].filter(card => user && card.roles.includes(user.role));
 
   const colorMap: Record<string, string> = {
@@ -78,6 +92,13 @@ export default function DashboardPage() {
     { href: '/dashboard/reports?type=broadsheet', icon: '📋', title: 'Broadsheet', desc: 'View class performance overview', roles: ['superadmin', 'school_admin', 'teacher'] },
     { href: '/dashboard/teachers', icon: '👨‍🏫', title: 'Manage Teachers', desc: 'Add teachers & assign subjects', roles: ['superadmin', 'school_admin'] },
     { href: '/dashboard/classes', icon: '🏛️', title: 'Manage Classes', desc: 'Configure classes and arms', roles: ['superadmin', 'school_admin'] },
+    { href: '/dashboard/reports', icon: '📊', title: 'My Report Card', desc: 'View and download your academic results', roles: ['student'] },
+    { href: '/dashboard/exams', icon: '📝', title: 'Online Exams', desc: 'Take timed tests and assessments', roles: ['student'] },
+    { href: '/dashboard/lesson-notes', icon: '📖', title: 'Lesson Notes', desc: 'Access your classroom materials', roles: ['student'] },
+    { href: '/dashboard/quizzes', icon: '📝', title: 'Practice Quizzes', desc: 'Test your knowledge with randomized questions', roles: ['student'] },
+    { href: '/dashboard/announcements', icon: '📢', title: 'Announcements', desc: 'View school news and updates', roles: ['student'] },
+    { href: '/dashboard/timetable', icon: '📅', title: 'Timetable', desc: 'Check your weekly class schedule', roles: ['student'] },
+    { href: '/dashboard/attendance', icon: '🗓️', title: 'Attendance', desc: 'Monitor your attendance percentage', roles: ['student'] },
   ].filter(link => user && link.roles.includes(user.role));
 
   return (

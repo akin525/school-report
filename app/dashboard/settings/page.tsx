@@ -10,7 +10,8 @@ export default function SettingsPage() {
     name: '', nursery_name: '', primary_name: '', secondary_name: '', address: '', phone: '', email: '', website: '', logo_url: '', motto: '', 
     nursery_max_ca1: 20, nursery_max_ca2: 20, nursery_max_exam: 60, nursery_max_weekly: 10,
     primary_max_ca1: 20, primary_max_ca2: 20, primary_max_exam: 60, primary_max_weekly: 10,
-    secondary_max_ca1: 20, secondary_max_ca2: 20, secondary_max_exam: 60, secondary_max_weekly: 10
+    secondary_max_ca1: 20, secondary_max_ca2: 20, secondary_max_exam: 60, secondary_max_weekly: 10,
+    openai_api_key: '', gemini_api_key: '', ai_enabled: 1
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -95,7 +96,10 @@ export default function SettingsPage() {
           secondary_max_ca1: d.school.secondary_max_ca1 ?? d.school.max_ca1 ?? 20, 
           secondary_max_ca2: d.school.secondary_max_ca2 ?? d.school.max_ca2 ?? 20, 
           secondary_max_exam: d.school.secondary_max_exam ?? d.school.max_exam ?? 60,
-          secondary_max_weekly: d.school.secondary_max_weekly ?? d.school.max_weekly ?? 10
+          secondary_max_weekly: d.school.secondary_max_weekly ?? d.school.max_weekly ?? 10,
+          openai_api_key: d.school.openai_api_key || '',
+          gemini_api_key: d.school.gemini_api_key || '',
+          ai_enabled: d.school.ai_enabled ?? 1
         });
       }
     }).catch(() => {
@@ -322,6 +326,61 @@ export default function SettingsPage() {
               className="btn-primary px-8"
             >
               {saving ? 'Saving...' : '💾 Save Settings'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="card space-y-5">
+        <div className="flex items-center justify-between border-b pb-3">
+            <h2 className="text-lg font-bold text-gray-700">AI Score Extraction Control</h2>
+            <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold ${form.ai_enabled ? 'text-green-600' : 'text-red-600'}`}>
+                    {form.ai_enabled ? 'ENABLED' : 'DISABLED'}
+                </span>
+                <button
+                    onClick={() => setForm({...form, ai_enabled: form.ai_enabled ? 0 : 1})}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${form.ai_enabled ? 'bg-blue-600' : 'bg-gray-200'}`}
+                >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.ai_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+            </div>
+        </div>
+        <p className="text-xs text-gray-500">
+            Configure the AI providers for score extraction from record sheets. If keys are left empty, the system will attempt to use global fallback keys if available.
+        </p>
+
+        <div className="grid grid-cols-1 gap-4">
+            <div>
+                <label className="label">OpenAI API Key (for ChatGPT)</label>
+                <input
+                    type="password"
+                    className="input font-mono"
+                    placeholder="sk-..."
+                    value={form.openai_api_key}
+                    onChange={e => setForm({...form, openai_api_key: e.target.value})}
+                    disabled={user?.role === 'teacher'}
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Used for GPT-4o high-accuracy table parsing.</p>
+            </div>
+            <div>
+                <label className="label">Gemini API Key</label>
+                <input
+                    type="password"
+                    className="input font-mono"
+                    placeholder="AIza..."
+                    value={form.gemini_api_key}
+                    onChange={e => setForm({...form, gemini_api_key: e.target.value})}
+                    disabled={user?.role === 'teacher'}
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Used for fast score extraction via Gemini 1.5 Flash.</p>
+            </div>
+        </div>
+
+        {user?.role !== 'teacher' && (
+          <div className="flex justify-end pt-2">
+            <button onClick={saveSettings} disabled={saving} className="btn-primary px-8">
+              {saving ? 'Saving...' : '💾 Save AI Config'}
             </button>
           </div>
         )}

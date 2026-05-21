@@ -6,6 +6,7 @@ import jsPDF from 'jspdf';
 export default function LessonNotesPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [student, setStudent] = useState<any>(null);
   const [teacher, setTeacher] = useState<any>(null);
   const [school, setSchool] = useState<any>(null);
   const [sessions, setSessions] = useState<any[]>([]);
@@ -31,6 +32,8 @@ export default function LessonNotesPage() {
   const [generationDifficulty, setGenerationDifficulty] = useState('medium');
   const [generationType, setGenerationType] = useState('multiple_choice');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingContent, setIsGeneratingContent] = useState(false);
+  const [aiProvider, setAIProvider] = useState<'gemini' | 'openai'>('openai');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -52,8 +55,13 @@ export default function LessonNotesPage() {
       setUser(d.user);
       setSchool(d.school);
       setTeacher(d.teacher);
+      setStudent(d.student);
       const sid = d.user.school_id;
-      
+
+      if (d.user.role === 'student' && d.student?.class_id) {
+        setSelectedClass(d.student.class_id);
+      }
+
       fetch(`/api/sessions?schoolId=${sid}`).then(r => r.json()).then(sess => {
         setSessions(sess);
         const curr = sess.find((s: any) => s.is_current) || sess[0];
@@ -158,9 +166,14 @@ export default function LessonNotesPage() {
       
       const res = await fetch(`/api/lesson-notes?${params}`);
       const data = await res.json();
-      setLessonNotes(data);
+      if (Array.isArray(data)) {
+        setLessonNotes(data);
+      } else {
+        setLessonNotes([]);
+      }
     } catch (error) {
       console.error('Error loading lesson notes:', error);
+      setLessonNotes([]);
     } finally {
       setLoading(false);
     }
@@ -320,7 +333,8 @@ export default function LessonNotesPage() {
         body: JSON.stringify({
           lessonNoteId: note.id,
           schoolId: user.school_id,
-          action: 'get-topics'
+          action: 'get-topics',
+          provider: aiProvider
         })
       });
 
@@ -349,7 +363,8 @@ export default function LessonNotesPage() {
           numQuestions: 5,
           difficulty: generationDifficulty,
           questionType: generationType,
-          selectedTopic: selectedTopic
+          selectedTopic: selectedTopic,
+          provider: aiProvider
         })
       });
 
@@ -364,6 +379,45 @@ export default function LessonNotesPage() {
       alert('Failed to generate questions');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleAIGenerateContent = async () => {
+    if (!formData.topic || !selectedSubject) {
+      alert('Please enter a topic and select a subject first.');
+      return;
+    }
+
+    const subject = subjects.find(s => s.id === selectedSubject)?.name;
+    const level = classes.find(c => c.id === selectedClass)?.name;
+
+    setIsGeneratingContent(true);
+    try {
+      const res = await fetch('/api/lesson-notes/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: formData.topic,
+          subject: subject,
+          level: level,
+          provider: aiProvider
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setFormData(prev => ({ ...prev, content: data.content }));
+        if (!formData.title) {
+          setFormData(prev => ({ ...prev, title: formData.topic }));
+        }
+      } else {
+        const error = await res.json();
+        alert('Failed to generate content: ' + error.error);
+      }
+    } catch (error) {
+      alert('Failed to generate content');
+    } finally {
+      setIsGeneratingContent(false);
     }
   };
 
@@ -622,20 +676,24 @@ export default function LessonNotesPage() {
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Lesson Notes</h1>
-            <p className="text-gray-600 mt-2">Manage your lesson notes and generate assessment questions</p>
+            <p className="text-gray-600 mt-2">
+              {user?.role === 'student' ? 'Access your classroom materials and study notes' : 'Manage your lesson notes and generate assessment questions'}
+            </p>
           </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2"
-          >
-            <span>➕</span> Create Lesson Note
-          </button>
+          {user?.role !== 'student' && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <span>➕</span> Create Lesson Note
+            </button>
+          )}
         </div>
 
         {/* Filters */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className={`bg-white p-6 rounded-lg shadow-sm border border-gray-200 ${user?.role === 'student' ? '' : ''}`}>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div>
+            <div className={user?.role === 'student' ? 'hidden' : ''}>
               <label className="block text-sm font-medium text-gray-700 mb-2">Session</label>
               <select
                 className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -648,7 +706,7 @@ export default function LessonNotesPage() {
                 ))}
               </select>
             </div>
-            <div>
+            <div className={user?.role === 'student' ? 'hidden' : ''}>
               <label className="block text-sm font-medium text-gray-700 mb-2">Class</label>
               <select
                 className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -674,7 +732,7 @@ export default function LessonNotesPage() {
                 ))}
               </select>
             </div>
-            <div>
+            <div className={user?.role === 'student' ? 'hidden' : ''}>
               <label className="block text-sm font-medium text-gray-700 mb-2">Teacher</label>
               <select
                 className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -687,7 +745,7 @@ export default function LessonNotesPage() {
                 ))}
               </select>
             </div>
-            <div>
+            <div className={user?.role === 'student' ? 'md:col-span-2' : ''}>
               <label className="block text-sm font-medium text-gray-700 mb-2">Term</label>
               <select
                 className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -751,18 +809,22 @@ export default function LessonNotesPage() {
                     <td className="p-4 text-gray-700">{new Date(note.created_at).toLocaleDateString()}</td>
                     <td className="p-4">
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => openEditModal(note)}
-                          className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleGenerateQuestions(note)}
-                          className="text-green-600 hover:text-green-800 font-medium text-sm"
-                        >
-                          Generate & Print Questions
-                        </button>
+                        {user?.role !== 'student' && (
+                          <>
+                            <button
+                              onClick={() => openEditModal(note)}
+                              className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleGenerateQuestions(note)}
+                              className="text-green-600 hover:text-green-800 font-medium text-sm"
+                            >
+                              Generate & Print Questions
+                            </button>
+                          </>
+                        )}
                         {note.file_url && (
                           <a
                             href={note.file_url}
@@ -770,15 +832,17 @@ export default function LessonNotesPage() {
                             rel="noopener noreferrer"
                             className="text-purple-600 hover:text-purple-800 font-medium text-sm"
                           >
-                            View File
+                            {user?.role === 'student' ? 'View/Download' : 'View File'}
                           </a>
                         )}
-                        <button
-                          onClick={() => handleDeleteNote(note.id)}
-                          className="text-red-600 hover:text-red-800 font-medium text-sm"
-                        >
-                          Delete
-                        </button>
+                        {user?.role !== 'student' && (
+                          <button
+                            onClick={() => handleDeleteNote(note.id)}
+                            className="text-red-600 hover:text-red-800 font-medium text-sm"
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -807,15 +871,29 @@ export default function LessonNotesPage() {
                   placeholder="Enter lesson note title"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Topic</label>
-                <input
-                  type="text"
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.topic}
-                  onChange={e => setFormData(prev => ({ ...prev, topic: e.target.value }))}
-                  placeholder="Enter main topic"
-                />
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Topic</label>
+                  <input
+                    type="text"
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.topic}
+                    onChange={e => setFormData(prev => ({ ...prev, topic: e.target.value }))}
+                    placeholder="Enter main topic"
+                  />
+                </div>
+                <div className="pt-7">
+                  <button
+                    type="button"
+                    onClick={handleAIGenerateContent}
+                    disabled={isGeneratingContent}
+                    className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1 shadow-sm disabled:bg-purple-300"
+                  >
+                    {isGeneratingContent ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : '✨ Generate with AI'}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Content</label>
@@ -934,15 +1012,29 @@ export default function LessonNotesPage() {
                   placeholder="Enter lesson note title"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Topic</label>
-                <input
-                  type="text"
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.topic}
-                  onChange={e => setFormData(prev => ({ ...prev, topic: e.target.value }))}
-                  placeholder="Enter main topic"
-                />
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Topic</label>
+                  <input
+                    type="text"
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.topic}
+                    onChange={e => setFormData(prev => ({ ...prev, topic: e.target.value }))}
+                    placeholder="Enter main topic"
+                  />
+                </div>
+                <div className="pt-7">
+                  <button
+                    type="button"
+                    onClick={handleAIGenerateContent}
+                    disabled={isGeneratingContent}
+                    className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1 shadow-sm disabled:bg-purple-300"
+                  >
+                    {isGeneratingContent ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : '✨ Generate with AI'}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Content</label>
@@ -1008,7 +1100,18 @@ export default function LessonNotesPage() {
             </div>
             <div className="p-6">
               <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">AI Provider</label>
+                    <select
+                      className="w-full p-2 bg-white border border-gray-300 rounded-lg text-sm"
+                      value={aiProvider}
+                      onChange={(e: any) => setAIProvider(e.target.value)}
+                    >
+                      <option value="openai">ChatGPT (OpenAI)</option>
+                      <option value="gemini">Gemini (Google)</option>
+                    </select>
+                  </div>
                   <div className="md:col-span-1">
                     <label className="block text-sm font-medium text-blue-800 mb-2">Topic</label>
                     <select
