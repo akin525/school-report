@@ -542,7 +542,7 @@ export default function ScoresPage() {
           <p className="text-gray-500 text-sm mt-1">Enter CA and Exam scores for students</p>
         </div>
         <div className="flex items-center gap-3">
-          {selectedClass && classes.find(c => c.id === selectedClass)?.category === 'secondary' && (
+          {selectedClass && (
             <button 
               onClick={() => router.push('/dashboard/reports/master-sheet')}
               className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all flex items-center shadow-sm"
