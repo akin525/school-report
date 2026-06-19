@@ -44,15 +44,13 @@ export default function MasterScoreSheetPage() {
         // If user is admin or no assignments, fetch all classes and subjects
         if (d.user.role === 'superadmin' || d.user.role === 'school_admin' || assignments.length === 0) {
           fetch(`/api/classes?schoolId=${sid}`).then(r => r.json()).then(cls => {
-            const secondaryClasses = cls.filter((c: any) => c.category === 'secondary');
-            setClasses(secondaryClasses);
+            setClasses(cls);
           });
           fetch(`/api/subjects?schoolId=${sid}`).then(r => r.json()).then(subjs => {
-            const secondarySubjects = subjs.filter((s: any) => s.category === 'secondary');
-            setSubjects(secondarySubjects);
+            setSubjects(subjs);
           });
         } else {
-          // Extract unique classes from assignments (only secondary)
+          // Extract unique classes from assignments
           const uniqueClasses = assignments
             .reduce((acc: any[], assignment: any) => {
               if (!acc.find((c: any) => c.id === assignment.class_id)) {
@@ -64,7 +62,7 @@ export default function MasterScoreSheetPage() {
               }
               return acc;
             }, []);
-          setClasses(uniqueClasses.filter((c: any) => c.name?.toLowerCase().includes('ss') || c.name?.toLowerCase().includes('jss') || c.name?.toLowerCase().includes('sss')));
+          setClasses(uniqueClasses);
           
           // Extract unique subjects from assignments
           const uniqueSubjects = assignments.reduce((acc: any[], assignment: any) => {
@@ -104,9 +102,8 @@ export default function MasterScoreSheetPage() {
       } else {
         // Fetch all subjects for the selected class (admin or no assignments)
         fetch(`/api/subjects?classId=${selectedClass}`).then(r => r.json()).then(subjs => {
-          const secondarySubjects = subjs.filter((s: any) => s.category === 'secondary');
-          setSubjects(secondarySubjects);
-          if (secondarySubjects.length > 0) setSelectedSubject(secondarySubjects[0].id);
+          setSubjects(subjs);
+          if (subjs.length > 0) setSelectedSubject(subjs[0].id);
           else setSelectedSubject('');
         });
       }
