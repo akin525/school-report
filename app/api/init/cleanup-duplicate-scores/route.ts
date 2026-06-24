@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 
                 for (let i = 1; i <= 10; i++) {
                   const field = `t${i}`;
-                  if ((winner[field] === null || winner[field] === undefined) && loser[loser[field] !== null]) {
+                  if ((winner[field] === null || winner[field] === undefined) && loser[field] !== null) {
                     updateFields.push(`${field} = ?`);
                     params.push(loser[field]);
                   }
