@@ -33,17 +33,29 @@ export async function POST(req: NextRequest) {
     }
     
     // Check for student existence by admission number and get their ID
-    const studentStmt = db.prepare('SELECT id, class_id FROM students WHERE admission_number = ? AND school_id = ?');
+    const studentStmt = db.prepare(`
+      SELECT s.id, s.class_id, c.category as class_category
+      FROM students s
+      LEFT JOIN classes c ON c.id = s.class_id
+      WHERE s.admission_number = ? AND s.school_id = ?
+    `);
     
     // Fetch all subjects for fuzzy name matching (handling Excel sanitization)
-    const allSubjects = db.prepare('SELECT id, name FROM subjects WHERE school_id = ?').all(sId) as any[];
-    const subjectLookup = new Map<string, any>();
+    const allSubjects = db.prepare('SELECT id, name, category FROM subjects WHERE school_id = ?').all(sId) as any[];
+
+    // subjectLookup by category then by name
+    const subjectLookup = new Map<string, Map<string, any>>();
+
     allSubjects.forEach(s => {
+      const cat = s.category || 'secondary';
+      if (!subjectLookup.has(cat)) subjectLookup.set(cat, new Map());
+
+      const catMap = subjectLookup.get(cat)!;
       // Store by original name
-      subjectLookup.set(s.name.toLowerCase(), s);
+      catMap.set(s.name.toLowerCase(), s);
       // Store by sanitized name (same logic as template generator)
       const sanitized = s.name.replace(/[:\\/?*\[\]]/g, "_").substring(0, 31).toLowerCase();
-      subjectLookup.set(sanitized, s);
+      catMap.set(sanitized, s);
     });
 
     // Check for teacher assignments
@@ -82,11 +94,14 @@ export async function POST(req: NextRequest) {
             continue;
           }
 
-          // 2. Get subject
-          const subject = subjectLookup.get(item.subject_name.toLowerCase());
+          // 2. Get subject within the student's class category
+          const cat = student.class_category || 'secondary';
+          const catMap = subjectLookup.get(cat);
+          const subject = catMap?.get(item.subject_name.toLowerCase());
+
           if (!subject) {
             results.failed++;
-            results.errors.push(`Subject "${item.subject_name}" not found.`);
+            results.errors.push(`Subject "${item.subject_name}" not found in category "${cat}".`);
             continue;
           }
 

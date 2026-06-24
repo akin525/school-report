@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const [gradeForm, setGradeForm] = useState({ grade: '', min_score: 0, max_score: 0, remark: '', color: '#000000' });
   const [savingGrade, setSavingGrade] = useState(false);
   const [msg, setMsg] = useState('');
+  const [repairing, setRepairing] = useState(false);
 
   const loadGrading = async (sid: string) => {
     const res = await fetch(`/api/grading?schoolId=${sid}`);
@@ -159,6 +160,25 @@ export default function SettingsPage() {
       alert('Network error while saving settings');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const repairDatabase = async () => {
+    if (!confirm('This will scan and merge duplicate score records (e.g., if a student has both a Primary and Secondary version of the same subject). Continue?')) return;
+
+    setRepairing(true);
+    try {
+      const res = await fetch('/api/init/cleanup-duplicate-scores', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || 'Database repair completed successfully!');
+      } else {
+        alert('Repair failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (e) {
+      alert('Network error during repair');
+    } finally {
+      setRepairing(false);
     }
   };
 
@@ -330,6 +350,30 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {(user?.role === 'superadmin' || user?.role === 'school_admin') && (
+        <div className="card space-y-4 border-red-100 bg-red-50/30">
+          <h2 className="text-lg font-bold text-red-800 border-b border-red-100 pb-3">Database Maintenance</h2>
+          <p className="text-xs text-gray-600">
+            Use these tools to fix common data consistency issues.
+          </p>
+          <div className="flex items-center justify-between gap-4 p-4 bg-white rounded-lg border border-red-100 shadow-sm">
+            <div>
+              <h3 className="text-sm font-bold text-gray-800">Fix Duplicate Scores</h3>
+              <p className="text-[10px] text-gray-500 mt-1">
+                Merges repeating subjects on report cards caused by category mismatches during bulk uploads.
+              </p>
+            </div>
+            <button
+              onClick={repairDatabase}
+              disabled={repairing}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-all shadow-sm disabled:opacity-50"
+            >
+              {repairing ? 'Repairing...' : '🛠️ Run Repair'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="card space-y-5">
         <div className="flex items-center justify-between border-b pb-3">

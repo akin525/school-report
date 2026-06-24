@@ -142,3 +142,41 @@ export async function PUT(req: NextRequest) {
   upsert(scores);
   return NextResponse.json({ success: true });
 }
+
+export async function DELETE(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Only admins can delete scores
+  if (session.role !== 'school_admin' && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const studentId = searchParams.get('studentId');
+  const classId = searchParams.get('classId');
+  const sessionId = searchParams.get('sessionId');
+  const term = searchParams.get('term');
+  const subjectId = searchParams.get('subjectId');
+  const schoolId = searchParams.get('schoolId') || session.schoolId;
+
+  if (!studentId || !classId || !sessionId || !term) {
+    return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+  }
+
+  const db = getDb();
+  let query = 'DELETE FROM scores WHERE school_id = ? AND student_id = ? AND class_id = ? AND session_id = ? AND term = ?';
+  const params: any[] = [schoolId, studentId, classId, sessionId, parseInt(term)];
+
+  if (subjectId) {
+    query += ' AND subject_id = ?';
+    params.push(subjectId);
+  }
+
+  const result = db.prepare(query).run(...params);
+
+  return NextResponse.json({
+    success: true,
+    message: `Deleted ${result.changes} score record(s).`
+  });
+}
