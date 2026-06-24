@@ -241,6 +241,50 @@ export default function ScoresPage() {
     setTimeout(() => setSaveMsg(''), 3000);
   };
 
+  const deleteStudentScores = async (studentId: string) => {
+    if (!confirm('Are you sure you want to delete ALL scores for this student for the current term and session? This cannot be undone.')) return;
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/scores?studentId=${studentId}&classId=${selectedClass}&sessionId=${selectedSession}&term=${selectedTerm}&schoolId=${schoolId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setSaveMsg('Scores deleted successfully');
+        loadSubjectsAndScores();
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Failed to delete scores');
+      }
+    } catch (e) {
+      alert('Error deleting scores');
+    }
+    setSaving(false);
+    setTimeout(() => setSaveMsg(''), 3000);
+  };
+
+  const deleteSubjectScore = async (studentId: string, subjectId: string) => {
+    if (!confirm('Are you sure you want to delete this score record?')) return;
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/scores?studentId=${studentId}&subjectId=${subjectId}&classId=${selectedClass}&sessionId=${selectedSession}&term=${selectedTerm}&schoolId=${schoolId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setSaveMsg('Score deleted successfully');
+        loadSubjectsAndScores();
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Failed to delete score');
+      }
+    } catch (e) {
+      alert('Error deleting score');
+    }
+    setSaving(false);
+    setTimeout(() => setSaveMsg(''), 3000);
+  };
+
   const getOrdinal = (n: number) => {
     const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
@@ -692,6 +736,7 @@ export default function ScoresPage() {
                       <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 border-r w-16 text-red-600">100</th>
                       <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 border-r w-16">Rank</th>
                       <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 w-16">Pos</th>
+                      {(user?.role === 'school_admin' || user?.role === 'superadmin') && <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 w-10 border-l"></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -744,6 +789,17 @@ export default function ScoresPage() {
                             <td className="px-2 py-2 text-center text-sm font-bold text-red-600 border-r bg-gray-50/50">{grandTotal || 0}</td>
                             <td className="px-2 py-2 text-center text-sm font-bold text-gray-700 border-r">{rank}</td>
                             <td className="px-2 py-2 text-center text-sm font-bold text-red-600">{getOrdinal(rank)}</td>
+                            {(user?.role === 'school_admin' || user?.role === 'superadmin') && (
+                              <td className="px-2 py-2 text-center border-l">
+                                <button
+                                  onClick={() => deleteSubjectScore(student.id, selectedSubject)}
+                                  className="text-gray-400 hover:text-red-600 transition-colors"
+                                  title="Delete this score"
+                                >
+                                  🗑️
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         );
                       });
@@ -760,8 +816,19 @@ export default function ScoresPage() {
                     <h3 className="font-bold uppercase">{student.last_name}, {student.first_name} {student.middle_name}</h3>
                     <p className="text-gray-400 text-xs">{student.admission_number || 'No Admission No.'}</p>
                   </div>
-                  <div className="text-right text-xs text-gray-400">
-                    Term {selectedTerm} Scores
+                  <div className="flex items-center gap-4">
+                    <div className="text-right text-xs text-gray-400">
+                      Term {selectedTerm} Scores
+                    </div>
+                    {(user?.role === 'school_admin' || user?.role === 'superadmin') && (
+                      <button
+                        onClick={() => deleteStudentScores(student.id)}
+                        className="bg-red-600 hover:bg-red-700 text-white text-[10px] px-2 py-1 rounded transition-colors flex items-center gap-1"
+                        title="Delete all scores for this student for this term"
+                      >
+                        <span>🗑️</span> Delete All
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -774,6 +841,7 @@ export default function ScoresPage() {
                         <th className="table-header text-center">Exam ({maxExam})</th>
                         <th className="table-header text-center">Total (100)</th>
                         <th className="table-header text-center">Grade</th>
+                        {(user?.role === 'school_admin' || user?.role === 'superadmin') && <th className="table-header text-center w-10"></th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -814,6 +882,17 @@ export default function ScoresPage() {
                             </td>
                             <td className="table-cell text-center font-bold text-gray-800">{total > 0 ? total.toFixed(1) : '—'}</td>
                             <td className="table-cell text-center text-sm font-bold" style={{ color: gInfo.color }}>{total > 0 ? gInfo.grade : '—'}</td>
+                            {(user?.role === 'school_admin' || user?.role === 'superadmin') && (
+                              <td className="px-2 py-1.5 text-center">
+                                <button
+                                  onClick={() => deleteSubjectScore(student.id, sub.id)}
+                                  className="text-gray-400 hover:text-red-600 transition-colors"
+                                  title="Delete this subject score"
+                                >
+                                  🗑️
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
