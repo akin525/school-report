@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, hashPassword } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { students, users } from '@/lib/schema';
+import { eq, and, or, isNull } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(req: NextRequest) {
@@ -15,13 +17,13 @@ export async function POST(req: NextRequest) {
 
     if (!sId) return NextResponse.json({ error: 'School ID required' }, { status: 400 });
 
-    const db = getDb();
-
     // Find students without a user_id
-    const studentsWithoutLogin = db.prepare(`
-      SELECT * FROM students
-      WHERE school_id = ? AND (user_id IS NULL OR user_id = '')
-    `).all(sId) as any[];
+    const studentsWithoutLogin = await db.select().from(students).where(
+      and(
+        eq(students.school_id, sId),
+        or(isNull(students.user_id), eq(students.user_id, ''))
+      )
+    );
 
     if (studentsWithoutLogin.length === 0) {
       return NextResponse.json({ message: 'No students found without login credentials', count: 0 });
@@ -32,9 +34,8 @@ export async function POST(req: NextRequest) {
     let successCount = 0;
     let errorCount = 0;
 
-    // Use a transaction for better performance
-    const generateTransaction = db.transaction((students: any[]) => {
-      for (const student of students) {
+    await db.transaction(async (tx) => {
+      for (const student of studentsWithoutLogin) {
         try {
           // Use admission number as username, if missing use first.last.last4id
           let username = student.admission_number;
@@ -45,15 +46,20 @@ export async function POST(req: NextRequest) {
           const userId = uuidv4();
 
           // 1. Create entry in users table
-          db.prepare(`
-            INSERT INTO users (id, school_id, name, email, password_hash, role)
-            VALUES (?, ?, ?, ?, ?, 'student')
-          `).run(userId, sId, `${student.first_name} ${student.last_name}`, username, pwHash);
+          await tx.insert(users).values({
+            id: userId,
+            school_id: sId,
+            name: `${student.first_name} ${student.last_name}`,
+            email: username, // Using username as email/identifier
+            password_hash: pwHash,
+            role: 'student'
+          });
 
           // 2. Link user to student record
-          db.prepare(`
-            UPDATE students SET user_id = ?, email = ? WHERE id = ?
-          `).run(userId, username, student.id);
+          await tx.update(students).set({
+            user_id: userId,
+            email: username
+          }).where(eq(students.id, student.id));
 
           successCount++;
         } catch (err) {
@@ -62,8 +68,6 @@ export async function POST(req: NextRequest) {
         }
       }
     });
-
-    generateTransaction(studentsWithoutLogin);
 
     return NextResponse.json({
       success: true,
@@ -78,3 +82,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+

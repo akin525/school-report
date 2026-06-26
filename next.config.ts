@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['better-sqlite3'],
+  // removed better-sqlite3 from serverExternalPackages
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**' },

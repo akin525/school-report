@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { exams, subjects, classes, examSubmissions, students } from '@/lib/schema';
+import { eq, and, desc, getTableColumns } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,27 +14,32 @@ export async function GET(req: NextRequest) {
 
     if (!examId) return NextResponse.json({ error: 'examId required' }, { status: 400 });
 
-    const db = getDb();
+    const examResult = await db.select({
+      ...getTableColumns(exams),
+      subject_name: subjects.name,
+      class_name: classes.name
+    })
+      .from(exams)
+      .innerJoin(subjects, eq(subjects.id, exams.subject_id))
+      .innerJoin(classes, eq(classes.id, exams.class_id))
+      .where(eq(exams.id, examId))
+      .limit(1);
 
-    const exam = db.prepare(`
-      SELECT e.*, s.name as subject_name, c.name as class_name
-      FROM exams e
-      JOIN subjects s ON s.id = e.subject_id
-      JOIN classes c ON c.id = e.class_id
-      WHERE e.id = ?
-    `).get(examId);
+    const submissions = await db.select({
+      ...getTableColumns(examSubmissions),
+      first_name: students.first_name,
+      last_name: students.last_name,
+      admission_number: students.admission_number
+    })
+      .from(examSubmissions)
+      .innerJoin(students, eq(students.id, examSubmissions.student_id))
+      .where(eq(examSubmissions.exam_id, examId))
+      .orderBy(desc(examSubmissions.submitted_at));
 
-    const submissions = db.prepare(`
-      SELECT es.*, s.first_name, s.last_name, s.admission_number
-      FROM exam_submissions es
-      JOIN students s ON s.id = es.student_id
-      WHERE es.exam_id = ?
-      ORDER BY es.submitted_at DESC
-    `).all(examId);
-
-    return NextResponse.json({ exam, submissions });
+    return NextResponse.json({ exam: examResult[0], submissions });
   } catch (error: any) {
     console.error('EXAM_RESULTS_GET_ERROR:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+

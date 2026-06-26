@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { users, students } from '@/lib/schema';
+import { eq } from 'drizzle-orm';
 import { verifyPassword, createToken } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
@@ -9,15 +11,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
     }
 
-    const db = getDb();
     // Search in users table (email/username)
-    let user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+    const usersResult = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    let user = usersResult[0];
 
     // If not found, check if it's an admission number in the students table
     if (!user) {
-      const student = db.prepare('SELECT user_id FROM students WHERE admission_number = ?').get(email) as any;
+      const studentsResult = await db.select().from(students).where(eq(students.admission_number, email)).limit(1);
+      const student = studentsResult[0];
       if (student?.user_id) {
-        user = db.prepare('SELECT * FROM users WHERE id = ?').get(student.user_id) as any;
+        const studentUserResult = await db.select().from(users).where(eq(users.id, student.user_id)).limit(1);
+        user = studentUserResult[0];
       }
     }
 

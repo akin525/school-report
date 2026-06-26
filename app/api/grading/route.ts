@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { gradingSystem } from '@/lib/schema';
+import { eq, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -9,9 +11,11 @@ export async function GET(req: NextRequest) {
 
   if (!schoolId) return NextResponse.json({ error: 'School ID required' }, { status: 400 });
 
-  const db = getDb();
-  const grading = db.prepare('SELECT * FROM grading_system WHERE school_id = ? ORDER BY min_score DESC').all(schoolId);
-  return NextResponse.json(grading);
+  const results = await db.select().from(gradingSystem)
+    .where(eq(gradingSystem.school_id, schoolId))
+    .orderBy(desc(gradingSystem.min_score));
+
+  return NextResponse.json(results);
 }
 
 export async function POST(req: NextRequest) {
@@ -19,13 +23,17 @@ export async function POST(req: NextRequest) {
   if (!session || session.role === 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { school_id, grade, min_score, max_score, remark, color } = await req.json();
-  const db = getDb();
   const id = uuidv4();
 
-  db.prepare(`
-    INSERT INTO grading_system (id, school_id, grade, min_score, max_score, remark, color)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, school_id, grade, min_score, max_score, remark, color);
+  await db.insert(gradingSystem).values({
+    id,
+    school_id,
+    grade,
+    min_score,
+    max_score,
+    remark,
+    color
+  });
 
   return NextResponse.json({ success: true, id });
 }
@@ -35,12 +43,14 @@ export async function PUT(req: NextRequest) {
   if (!session || session.role === 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id, grade, min_score, max_score, remark, color } = await req.json();
-  const db = getDb();
 
-  db.prepare(`
-    UPDATE grading_system SET grade=?, min_score=?, max_score=?, remark=?, color=?
-    WHERE id=?
-  `).run(grade, min_score, max_score, remark, color, id);
+  await db.update(gradingSystem).set({
+    grade,
+    min_score,
+    max_score,
+    remark,
+    color
+  }).where(eq(gradingSystem.id, id));
 
   return NextResponse.json({ success: true });
 }
@@ -50,8 +60,8 @@ export async function DELETE(req: NextRequest) {
   if (!session || session.role === 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id } = await req.json();
-  const db = getDb();
 
-  db.prepare('DELETE FROM grading_system WHERE id = ?').run(id);
+  await db.delete(gradingSystem).where(eq(gradingSystem.id, id));
   return NextResponse.json({ success: true });
 }
+

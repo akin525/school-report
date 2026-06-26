@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { timetable, subjects, teachers } from '@/lib/schema';
+import { eq, and, asc, getTableColumns } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -13,17 +15,18 @@ export async function GET(req: NextRequest) {
 
     if (!classId) return NextResponse.json({ error: 'classId required' }, { status: 400 });
 
-    const db = getDb();
-    const timetable = db.prepare(`
-      SELECT t.*, s.name as subject_name, tch.name as teacher_name
-      FROM timetable t
-      JOIN subjects s ON s.id = t.subject_id
-      LEFT JOIN teachers tch ON tch.id = t.teacher_id
-      WHERE t.class_id = ?
-      ORDER BY t.day_of_week, t.start_time
-    `).all(classId);
+    const results = await db.select({
+      ...getTableColumns(timetable),
+      subject_name: subjects.name,
+      teacher_name: teachers.name
+    })
+      .from(timetable)
+      .innerJoin(subjects, eq(subjects.id, timetable.subject_id))
+      .leftJoin(teachers, eq(teachers.id, timetable.teacher_id))
+      .where(eq(timetable.class_id, classId))
+      .orderBy(asc(timetable.day_of_week), asc(timetable.start_time));
 
-    return NextResponse.json(timetable);
+    return NextResponse.json(results);
   } catch (error: any) {
     console.error('TIMETABLE_GET_ERROR:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -42,12 +45,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const db = getDb();
     const id = uuidv4();
-    db.prepare(`
-      INSERT INTO timetable (id, school_id, class_id, day_of_week, start_time, end_time, subject_id, teacher_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, sId, class_id, day_of_week, start_time, end_time, subject_id, teacher_id || null);
+    await db.insert(timetable).values({
+      id,
+      school_id: sId || '',
+      class_id,
+      day_of_week,
+      start_time,
+      end_time,
+      subject_id,
+      teacher_id: teacher_id || null
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -65,8 +73,7 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
 
-    const db = getDb();
-    db.prepare('DELETE FROM timetable WHERE id = ?').run(id);
+    await db.delete(timetable).where(eq(timetable.id, id));
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -74,3 +81,4 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+

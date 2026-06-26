@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { students, classes, scores, subjects } from '@/lib/schema';
+import { eq, and, sql } from 'drizzle-orm';
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -8,107 +10,112 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const db = getDb();
   let mergedCount = 0;
   let deletedCount = 0;
   let updatedIdCount = 0;
 
   try {
     // 1. Get all students and their class categories
-    const students = db.prepare(`
-      SELECT s.id, s.school_id, c.category as class_category
-      FROM students s
-      LEFT JOIN classes c ON c.id = s.class_id
-    `).all() as any[];
+    const allStudents = await db.select({
+      id: students.id,
+      school_id: students.school_id,
+      class_category: classes.category
+    })
+      .from(students)
+      .leftJoin(classes, eq(classes.id, students.class_id));
 
-    const transaction = db.transaction(() => {
-      for (const student of students) {
+    await db.transaction(async (tx) => {
+      for (const student of allStudents) {
         // Find all subjects (by name) that use multiple Subject IDs for this student in the same session
-        const inconsistentSubjects = db.prepare(`
-          SELECT sub.name as subject_name, sc.session_id, COUNT(DISTINCT sc.subject_id) as id_count
-          FROM scores sc
-          JOIN subjects sub ON sub.id = sc.subject_id
-          WHERE sc.student_id = ?
-          GROUP BY sub.name, sc.session_id
-          HAVING id_count > 1
-        `).all(student.id) as any[];
+        const inconsistentSubjects = await tx.select({
+          subject_name: subjects.name,
+          session_id: scores.session_id,
+          id_count: sql<number>`COUNT(DISTINCT ${scores.subject_id})`
+        })
+          .from(scores)
+          .innerJoin(subjects, eq(subjects.id, scores.subject_id))
+          .where(eq(scores.student_id, student.id))
+          .groupBy(subjects.name, scores.session_id)
+          .having(sql`COUNT(DISTINCT ${scores.subject_id}) > 1`);
 
         for (const target of inconsistentSubjects) {
           // Get all score records for this subject name and session
-          const allScoresForName = db.prepare(`
-            SELECT sc.*, sub.category as subject_category
-            FROM scores sc
-            JOIN subjects sub ON sub.id = sc.subject_id
-            WHERE sc.student_id = ? AND sc.session_id = ? AND sub.name = ?
-          `).all(student.id, target.session_id, target.subject_name) as any[];
-
-          // Get the unique subject IDs involved
-          const subjectIds = Array.from(new Set(allScoresForName.map(s => s.subject_id)));
+          const allScoresForName = await tx.select({
+            score: scores,
+            subject_category: subjects.category,
+            subject_name: subjects.name
+          })
+            .from(scores)
+            .innerJoin(subjects, eq(subjects.id, scores.subject_id))
+            .where(and(
+              eq(scores.student_id, student.id),
+              eq(scores.session_id, target.session_id),
+              eq(subjects.name, target.subject_name || '')
+            ));
 
           // Determine the "correct" subject ID based on category
-          // First, find all subjects with this name in the school
-          const possibleSubjects = db.prepare('SELECT id, category FROM subjects WHERE school_id = ? AND name = ?')
-            .all(student.school_id, target.subject_name) as any[];
+          const possibleSubjects = await tx.select({ id: subjects.id, category: subjects.category })
+            .from(subjects)
+            .where(and(
+              eq(subjects.school_id, student.school_id || ''),
+              eq(subjects.name, target.subject_name || '')
+            ));
 
           let correctSubjectId = possibleSubjects.find(s => (s.category || 'secondary') === (student.class_category || 'secondary'))?.id;
 
-          // Fallback if no category match: use the ID that is most frequent in the score records
           if (!correctSubjectId) {
              const counts: Record<string, number> = {};
-             allScoresForName.forEach(s => counts[s.subject_id] = (counts[s.subject_id] || 0) + 1);
+             allScoresForName.forEach(item => counts[item.score.subject_id] = (counts[item.score.subject_id] || 0) + 1);
              correctSubjectId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
           }
 
           // Process each term
           for (const term of [1, 2, 3]) {
-            const scoresForTerm = allScoresForName.filter(s => s.term === term);
+            const scoresForTerm = allScoresForName.filter(item => item.score.term === term);
             if (scoresForTerm.length === 0) continue;
 
-            const winner = scoresForTerm.find(s => s.subject_id === correctSubjectId);
+            const winnerEntry = scoresForTerm.find(item => item.score.subject_id === correctSubjectId);
 
-            if (winner) {
-              // We have a winner record. Merge any other records for this term into it.
-              const losers = scoresForTerm.filter(s => s.id !== winner.id);
-              for (const loser of losers) {
-                const updateFields = [];
-                const params = [];
+            if (winnerEntry) {
+              const winner = winnerEntry.score;
+              const losers = scoresForTerm.filter(item => item.score.id !== winner.id);
+              for (const loserEntry of losers) {
+                const loser = loserEntry.score;
+                const updateData: any = {};
 
-                ['ca1_score', 'ca2_score', 'exam_score'].forEach(field => {
-                  if ((winner[field] === 0 || winner[field] === null) && loser[field] > 0) {
-                    updateFields.push(`${field} = ?`);
-                    params.push(loser[field]);
-                    winner[field] = loser[field];
+                ['ca1_score', 'ca2_score', 'exam_score'].forEach((field: string) => {
+                  const f = field as keyof typeof winner;
+                  if (((winner[f] as number) === 0 || winner[f] === null) && (loser[f] as number) > 0) {
+                    updateData[f] = loser[f];
+                    (winner as any)[f] = loser[f];
                   }
                 });
 
                 for (let i = 1; i <= 10; i++) {
-                  const field = `t${i}`;
+                  const field = `t${i}` as keyof typeof winner;
                   if ((winner[field] === null || winner[field] === undefined) && loser[field] !== null) {
-                    updateFields.push(`${field} = ?`);
-                    params.push(loser[field]);
+                    updateData[field] = loser[field];
                   }
                 }
 
-                if (updateFields.length > 0) {
-                  params.push(winner.id);
-                  db.prepare(`UPDATE scores SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...params);
+                if (Object.keys(updateData).length > 0) {
+                  await tx.update(scores).set({ ...updateData, updated_at: new Date() }).where(eq(scores.id, winner.id));
                   mergedCount++;
                 }
-                db.prepare('DELETE FROM scores WHERE id = ?').run(loser.id);
+                await tx.delete(scores).where(eq(scores.id, loser.id));
                 deletedCount++;
               }
             } else {
-              // No record exists for the correct Subject ID in this term.
-              // Move the best available record to the correct ID.
-              const bestRecord = scoresForTerm.sort((a, b) => (b.total || 0) - (a.total || 0))[0];
-              db.prepare('UPDATE scores SET subject_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-                .run(correctSubjectId, bestRecord.id);
+              const bestEntry = scoresForTerm.sort((a, b) => (b.score.total || 0) - (a.score.total || 0))[0];
+              await tx.update(scores).set({
+                subject_id: correctSubjectId!,
+                updated_at: new Date()
+              }).where(eq(scores.id, bestEntry.score.id));
               updatedIdCount++;
 
-              // Delete any other records for this term (if any existed, though unlikely if no winner)
-              const others = scoresForTerm.filter(s => s.id !== bestRecord.id);
+              const others = scoresForTerm.filter(item => item.score.id !== bestEntry.score.id);
               for (const other of others) {
-                db.prepare('DELETE FROM scores WHERE id = ?').run(other.id);
+                await tx.delete(scores).where(eq(scores.id, other.score.id));
                 deletedCount++;
               }
             }
@@ -116,8 +123,6 @@ export async function POST(req: NextRequest) {
         }
       }
     });
-
-    transaction();
 
     return NextResponse.json({
       success: true,
@@ -128,3 +133,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

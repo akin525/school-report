@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { db } from '@/lib/db';
+import { lessonNotes, generatedQuestions, questionBank } from '@/lib/schema';
+import { eq, and, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { getSession } from '@/lib/auth';
 import path from 'path';
@@ -28,10 +30,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Lesson note ID and school ID are required' }, { status: 400 });
     }
 
-    const db = getDb();
-    
-    const lessonNote = db.prepare('SELECT * FROM lesson_notes WHERE id = ? AND school_id = ?')
-      .get(lessonNoteId, schoolId) as any;
+    const lessonNoteResult = await db.select().from(lessonNotes).where(
+      and(eq(lessonNotes.id, lessonNoteId), eq(lessonNotes.school_id, schoolId))
+    ).limit(1);
+    const lessonNote = lessonNoteResult[0];
 
     if (!lessonNote) {
       return NextResponse.json({ error: 'Lesson note not found' }, { status: 404 });
@@ -70,69 +72,54 @@ export async function POST(request: NextRequest) {
         textToProcess = extractRelevantSection(rawText, htmlContent, selectedTopic);
     }
 
-    let generatedQuestions = [];
+    let generatedQuestionsList: any[] = [];
     try {
       const { generateQuestionsFromNote } = await import('@/lib/ai');
-      generatedQuestions = await generateQuestionsFromNote(textToProcess, numQuestions, difficulty, questionType, body.provider);
+      generatedQuestionsList = await generateQuestionsFromNote(textToProcess, numQuestions, difficulty, questionType, body.provider);
     } catch (aiError) {
       console.error('AI Generation failed, falling back to rule-based generation:', aiError);
-      generatedQuestions = generateSmartQuestions(textToProcess, numQuestions, difficulty, questionType);
+      generatedQuestionsList = generateSmartQuestions(textToProcess, numQuestions, difficulty, questionType);
     }
 
     const savedQuestions = [];
-    for (const question of generatedQuestions) {
+    for (const question of generatedQuestionsList) {
       const questionId = uuidv4();
       const questionBankId = uuidv4();
       
-      const generatedStmt = db.prepare(`
-        INSERT INTO generated_questions (
-          id, school_id, lesson_note_id, question_text, option_a, option_b, 
-          option_c, option_d, correct_answer, difficulty, question_type, correct_answer_text
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      generatedStmt.run(
-        questionId,
-        schoolId,
-        lessonNoteId,
-        question.question_text,
-        question.option_a || '',
-        question.option_b || '',
-        question.option_c || '',
-        question.option_d || '',
-        questionType === 'multiple_choice' ? (question.correct_answer || 'A') : 'A',
-        question.difficulty,
-        questionType,
-        questionType === 'short_answer' ? question.correct_answer : null
-      );
+      await db.insert(generatedQuestions).values({
+        id: questionId,
+        school_id: schoolId,
+        lesson_note_id: lessonNoteId,
+        question_text: question.question_text,
+        option_a: question.option_a || '',
+        option_b: question.option_b || '',
+        option_c: question.option_c || '',
+        option_d: question.option_d || '',
+        correct_answer: questionType === 'multiple_choice' ? (question.correct_answer || 'A') : 'A',
+        difficulty: question.difficulty || difficulty,
+        question_type: questionType,
+        correct_answer_text: questionType === 'short_answer' ? question.correct_answer : null
+      });
       
-      const questionBankStmt = db.prepare(`
-        INSERT INTO question_bank (
-          id, school_id, teacher_id, subject_id, class_id, session_id, term,
-          question_text, option_a, option_b, option_c, option_d, 
-          correct_answer, question_type, difficulty, marks, topic
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      questionBankStmt.run(
-        questionBankId,
-        schoolId,
-        lessonNote.teacher_id,
-        lessonNote.subject_id,
-        lessonNote.class_id,
-        lessonNote.session_id,
-        lessonNote.term,
-        question.question_text,
-        question.option_a || null,
-        question.option_b || null,
-        question.option_c || null,
-        question.option_d || null,
-        question.correct_answer || 'Pending',
-        questionType,
-        question.difficulty,
-        difficulty === 'hard' ? 5 : difficulty === 'medium' ? 2 : 1,
-        selectedTopic ? `Topic: ${selectedTopic}` : 'Generated from Lesson Note: ' + lessonNote.title
-      );
+      await db.insert(questionBank).values({
+        id: questionBankId,
+        school_id: schoolId,
+        teacher_id: lessonNote.teacher_id,
+        subject_id: lessonNote.subject_id,
+        class_id: lessonNote.class_id,
+        session_id: lessonNote.session_id,
+        term: lessonNote.term,
+        question_text: question.question_text,
+        option_a: question.option_a || null,
+        option_b: question.option_b || null,
+        option_c: question.option_c || null,
+        option_d: question.option_d || null,
+        correct_answer: question.correct_answer || 'Pending',
+        question_type: questionType,
+        difficulty: question.difficulty || difficulty,
+        marks: difficulty === 'hard' ? 5 : difficulty === 'medium' ? 2 : 1,
+        topic: selectedTopic ? `Topic: ${selectedTopic}` : 'Generated from Lesson Note: ' + lessonNote.title
+      });
 
       savedQuestions.push({
         id: questionId,
@@ -159,11 +146,15 @@ export async function GET(request: NextRequest) {
       const lessonNoteId = searchParams.get('lessonNoteId');
       const schoolId = searchParams.get('schoolId');
       if (!lessonNoteId || !schoolId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
-      const db = getDb();
-      const questions = db.prepare('SELECT * FROM generated_questions WHERE lesson_note_id = ? AND school_id = ? ORDER BY created_at DESC').all(lessonNoteId, schoolId);
-      return NextResponse.json(questions);
+
+      const results = await db.select().from(generatedQuestions).where(
+        and(eq(generatedQuestions.lesson_note_id, lessonNoteId), eq(generatedQuestions.school_id, schoolId))
+      ).orderBy(desc(generatedQuestions.created_at));
+
+      return NextResponse.json(results);
     } catch (e) { return NextResponse.json({ error: 'Error' }, { status: 500 }); }
 }
+
 
 function detectTopics(html: string, raw: string) {
   const topics = new Set<string>();

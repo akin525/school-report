@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { teacherComments } from '@/lib/schema';
+import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -13,14 +15,13 @@ export async function GET(req: NextRequest) {
   const term = searchParams.get('term');
   const schoolId = searchParams.get('schoolId') || session.schoolId;
 
-  const db = getDb();
-  let query = 'SELECT * FROM teacher_comments WHERE school_id = ?';
-  const params: any[] = [schoolId];
-  if (studentId) { query += ' AND student_id = ?'; params.push(studentId); }
-  if (sessionId) { query += ' AND session_id = ?'; params.push(sessionId); }
-  if (term) { query += ' AND term = ?'; params.push(parseInt(term)); }
+  const filters = [eq(teacherComments.school_id, schoolId || '')];
+  if (studentId) filters.push(eq(teacherComments.student_id, studentId));
+  if (sessionId) filters.push(eq(teacherComments.session_id, sessionId));
+  if (term) filters.push(eq(teacherComments.term, parseInt(term)));
 
-  return NextResponse.json(db.prepare(query).all(...params));
+  const results = await db.select().from(teacherComments).where(and(...filters));
+  return NextResponse.json(results);
 }
 
 export async function POST(req: NextRequest) {
@@ -33,28 +34,51 @@ export async function POST(req: NextRequest) {
   const sId = schoolId || session.schoolId;
   const isTeacher = session.role === 'teacher';
 
-  const db = getDb();
-  const existing = db.prepare('SELECT id FROM teacher_comments WHERE student_id=? AND session_id=? AND term=?')
-    .get(studentId, sessionId, term) as any;
+  const existingResult = await db.select({ id: teacherComments.id }).from(teacherComments).where(
+    and(
+      eq(teacherComments.student_id, studentId),
+      eq(teacherComments.session_id, sessionId),
+      eq(teacherComments.term, term)
+    )
+  ).limit(1);
+  const existing = existingResult[0];
 
   if (existing) {
-    if (isTeacher) {
-      db.prepare(`UPDATE teacher_comments SET class_teacher_comment=?, class_teacher_date=?, class_teacher_signature=?,
-        next_term_starts=? WHERE id=?`)
-        .run(class_teacher_comment, class_teacher_date, class_teacher_signature, next_term_starts, existing.id);
-    } else {
-      db.prepare(`UPDATE teacher_comments SET class_teacher_comment=?, class_teacher_date=?, class_teacher_signature=?,
-        coordinator_remark=?, coordinator_date=?, coordinator_signature=?, next_term_starts=? WHERE id=?`)
-        .run(class_teacher_comment, class_teacher_date, class_teacher_signature, coordinator_remark, coordinator_date, coordinator_signature, next_term_starts, existing.id);
+    const updateData: any = {
+      class_teacher_comment,
+      class_teacher_date,
+      class_teacher_signature,
+      next_term_starts
+    };
+
+    if (!isTeacher) {
+      updateData.coordinator_remark = coordinator_remark;
+      updateData.coordinator_date = coordinator_date;
+      updateData.coordinator_signature = coordinator_signature;
     }
-    return NextResponse.json(db.prepare('SELECT * FROM teacher_comments WHERE id=?').get(existing.id));
+
+    await db.update(teacherComments).set(updateData).where(eq(teacherComments.id, existing.id));
+
+    const updated = await db.select().from(teacherComments).where(eq(teacherComments.id, existing.id)).limit(1);
+    return NextResponse.json(updated[0]);
   } else {
     const id = uuidv4();
-    db.prepare(`INSERT INTO teacher_comments (id, school_id, student_id, session_id, term,
-      class_teacher_comment, class_teacher_date, class_teacher_signature, coordinator_remark, coordinator_date, coordinator_signature, next_term_starts)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(id, sId, studentId, sessionId, term, class_teacher_comment, class_teacher_date, class_teacher_signature,
-        isTeacher ? null : coordinator_remark, isTeacher ? null : coordinator_date, isTeacher ? null : coordinator_signature, next_term_starts);
-    return NextResponse.json(db.prepare('SELECT * FROM teacher_comments WHERE id=?').get(id), { status: 201 });
+    await db.insert(teacherComments).values({
+      id,
+      school_id: sId || '',
+      student_id: studentId,
+      session_id: sessionId,
+      term,
+      class_teacher_comment,
+      class_teacher_date,
+      class_teacher_signature,
+      coordinator_remark: isTeacher ? null : coordinator_remark,
+      coordinator_date: isTeacher ? null : coordinator_date,
+      coordinator_signature: isTeacher ? null : coordinator_signature,
+      next_term_starts
+    });
+
+    const created = await db.select().from(teacherComments).where(eq(teacherComments.id, id)).limit(1);
+    return NextResponse.json(created[0], { status: 201 });
   }
 }

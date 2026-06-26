@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { students, subjects, classSubjects, questionBank } from '@/lib/schema';
+import { eq, and, sql, getTableColumns, inArray, asc, isNotNull, ne } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,69 +17,90 @@ export async function GET(req: NextRequest) {
     const termsOnly = searchParams.get('terms') === 'true';
     const limit = parseInt(searchParams.get('limit') || '10');
 
-    const db = getDb();
-
     // Get student's class
-    const student = db.prepare('SELECT class_id FROM students WHERE user_id = ?').get(session.userId) as any;
+    const studentResult = await db.select({ class_id: students.class_id }).from(students).where(eq(students.user_id, session.userId)).limit(1);
+    const student = studentResult[0];
     if (!student) return NextResponse.json({ error: 'Student record not found' }, { status: 404 });
 
     if (!subjectId) {
-      // Return list of subjects that have questions for this class
-      const subjects = db.prepare(`
-        SELECT DISTINCT s.id, s.name, (SELECT COUNT(*) FROM question_bank qb WHERE qb.subject_id = s.id AND qb.class_id = ?) as question_count
-        FROM subjects s
-        JOIN class_subjects cs ON cs.subject_id = s.id
-        WHERE cs.class_id = ?
-      `).all(student.class_id, student.class_id);
-      return NextResponse.json(subjects);
+      const questionCountSubquery = db.select({
+        subject_id: questionBank.subject_id,
+        count: sql<number>`COUNT(*)`.as('count')
+      }).from(questionBank).where(eq(questionBank.class_id, student.class_id || '')).groupBy(questionBank.subject_id).as('qc');
+
+      const results = await db.select({
+        id: subjects.id,
+        name: subjects.name,
+        question_count: sql<number>`COALESCE(${questionCountSubquery.count}, 0)`
+      })
+        .from(subjects)
+        .innerJoin(classSubjects, eq(classSubjects.subject_id, subjects.id))
+        .leftJoin(questionCountSubquery, eq(questionCountSubquery.subject_id, subjects.id))
+        .where(eq(classSubjects.class_id, student.class_id || ''));
+
+      return NextResponse.json(results);
     }
 
     if (termsOnly) {
-      const terms = db.prepare(`
-        SELECT DISTINCT term FROM question_bank
-        WHERE subject_id = ? AND class_id = ?
-        ORDER BY term ASC
-      `).all(subjectId, student.class_id);
-      return NextResponse.json(terms.map((t: any) => t.term));
+      const results = await db.selectDistinct({ term: questionBank.term })
+        .from(questionBank)
+        .where(and(eq(questionBank.subject_id, subjectId), eq(questionBank.class_id, student.class_id || '')))
+        .orderBy(asc(questionBank.term));
+
+      return NextResponse.json(results.map(t => t.term));
     }
 
     if (topicsOnly) {
-      let query = `
-        SELECT DISTINCT topic FROM question_bank
-        WHERE subject_id = ? AND class_id = ? AND topic IS NOT NULL AND topic != ''
-      `;
-      const params: any[] = [subjectId, student.class_id];
+      const filters = [
+        eq(questionBank.subject_id, subjectId),
+        eq(questionBank.class_id, student.class_id || ''),
+        isNotNull(questionBank.topic),
+        ne(questionBank.topic, '')
+      ];
+
       if (term && term !== 'mix') {
-        query += ' AND term = ?';
-        params.push(parseInt(term));
+        filters.push(eq(questionBank.term, parseInt(term)));
       }
-      const topics = db.prepare(query).all(...params);
-      return NextResponse.json(topics.map((t: any) => t.topic));
+
+      const results = await db.selectDistinct({ topic: questionBank.topic })
+        .from(questionBank)
+        .where(and(...filters));
+
+      return NextResponse.json(results.map(t => t.topic));
     }
 
-    // Get random questions for the subject and class
-    let query = `
-      SELECT id, question_text, option_a, option_b, option_c, option_d, question_type, marks, topic, term
-      FROM question_bank
-      WHERE subject_id = ? AND class_id = ?
-    `;
-    const params: any[] = [subjectId, student.class_id];
+    // Get random questions
+    const filters = [
+      eq(questionBank.subject_id, subjectId),
+      eq(questionBank.class_id, student.class_id || '')
+    ];
 
     if (term && term !== 'mix') {
-      query += ' AND term = ?';
-      params.push(parseInt(term));
+      filters.push(eq(questionBank.term, parseInt(term)));
     }
 
     if (topic && topic !== 'mix') {
-      query += ' AND topic = ?';
-      params.push(topic);
+      filters.push(eq(questionBank.topic, topic));
     }
 
-    query += ' ORDER BY RANDOM() LIMIT ?';
-    params.push(limit);
+    const results = await db.select({
+      id: questionBank.id,
+      question_text: questionBank.question_text,
+      option_a: questionBank.option_a,
+      option_b: questionBank.option_b,
+      option_c: questionBank.option_c,
+      option_d: questionBank.option_d,
+      question_type: questionBank.question_type,
+      marks: questionBank.marks,
+      topic: questionBank.topic,
+      term: questionBank.term
+    })
+      .from(questionBank)
+      .where(and(...filters))
+      .orderBy(sql`RAND()`)
+      .limit(limit);
 
-    const questions = db.prepare(query).all(...params);
-    return NextResponse.json(questions);
+    return NextResponse.json(results);
   } catch (error: any) {
     console.error('QUIZ_GET_ERROR:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -89,26 +112,22 @@ export async function POST(req: NextRequest) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { subjectId, answers } = await req.json(); // answers is { questionId: selectedOption }
+    const { subjectId, answers } = await req.json();
     if (!subjectId || !answers) return NextResponse.json({ error: 'Missing subjectId or answers' }, { status: 400 });
 
-    const db = getDb();
     const questionIds = Object.keys(answers);
-
     if (questionIds.length === 0) return NextResponse.json({ score: 0, total: 0 });
 
-    // Fetch correct answers for these questions
-    const placeholders = questionIds.map(() => '?').join(',');
-    const correctAnswers = db.prepare(`
-      SELECT id, correct_answer, marks FROM question_bank WHERE id IN (${placeholders})
-    `).all(...questionIds) as any[];
+    const correctAnswers = await db.select({ id: questionBank.id, correct_answer: questionBank.correct_answer, marks: questionBank.marks })
+      .from(questionBank)
+      .where(inArray(questionBank.id, questionIds));
 
     let score = 0;
     let totalMarks = 0;
     const results = correctAnswers.map(q => {
       const isCorrect = q.correct_answer === answers[q.id];
-      if (isCorrect) score += q.marks;
-      totalMarks += q.marks;
+      if (isCorrect) score += (q.marks || 1);
+      totalMarks += (q.marks || 1);
       return {
         questionId: q.id,
         correctAnswer: q.correct_answer,
@@ -120,7 +139,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       score,
       totalMarks,
-      percentage: Math.round((score / totalMarks) * 100),
+      percentage: totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0,
       results
     });
   } catch (error: any) {
@@ -128,3 +147,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { teachers, teacherAssignments, students, teacherComments } from '@/lib/schema';
+import { eq, and, isNull, inArray, asc, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -17,39 +19,54 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'classId and sessionId required' }, { status: 400 });
   }
 
-  const db = getDb();
-
   // If user is a teacher, check if they are the assigned Class Teacher for this class
   if (session.role === 'teacher') {
-    const teacher = db.prepare('SELECT id FROM teachers WHERE user_id = ?').get(session.userId) as any;
+    const teacherResult = await db.select({ id: teachers.id }).from(teachers).where(eq(teachers.user_id, session.userId)).limit(1);
+    const teacher = teacherResult[0];
     if (!teacher) return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 });
 
-    const assignment = db.prepare(`
-      SELECT id FROM teacher_assignments 
-      WHERE teacher_id = ? AND class_id = ? AND session_id = ? AND subject_id IS NULL
-    `).get(teacher.id, classId, sessionId);
+    const assignmentResult = await db.select({ id: teacherAssignments.id }).from(teacherAssignments).where(
+      and(
+        eq(teacherAssignments.teacher_id, teacher.id),
+        eq(teacherAssignments.class_id, classId),
+        eq(teacherAssignments.session_id, sessionId),
+        isNull(teacherAssignments.subject_id)
+      )
+    ).limit(1);
 
-    if (!assignment) {
+    if (assignmentResult.length === 0) {
       return NextResponse.json({ error: 'You are not assigned as the Class Teacher for this class' }, { status: 403 });
     }
   }
 
   // Get all students in the class
-  const students = db.prepare(`
-    SELECT id, first_name, middle_name, last_name, admission_number
-    FROM students
-    WHERE class_id = ? AND school_id = ?
-    ORDER BY first_name, last_name
-  `).all(classId, schoolId) as any[];
+  const classStudents = await db.select({
+    id: students.id,
+    first_name: students.first_name,
+    middle_name: students.middle_name,
+    last_name: students.last_name,
+    admission_number: students.admission_number
+  })
+    .from(students)
+    .where(and(eq(students.class_id, classId), eq(students.school_id, schoolId || '')))
+    .orderBy(asc(students.first_name), asc(students.last_name));
+
+  if (classStudents.length === 0) {
+    return NextResponse.json({ students: [], comments: [] });
+  }
 
   // Get existing comments for these students
-  const comments = db.prepare(`
-    SELECT * FROM teacher_comments
-    WHERE student_id IN (${students.map(() => '?').join(',')})
-    AND session_id = ? AND term = ? AND school_id = ?
-  `).all(...students.map(s => s.id), sessionId, term, schoolId) as any[];
+  const studentIds = classStudents.map(s => s.id);
+  const comments = await db.select().from(teacherComments).where(
+    and(
+      inArray(teacherComments.student_id, studentIds),
+      eq(teacherComments.session_id, sessionId),
+      eq(teacherComments.term, term),
+      eq(teacherComments.school_id, schoolId || '')
+    )
+  );
 
-  return NextResponse.json({ students, comments });
+  return NextResponse.json({ students: classStudents, comments });
 }
 
 export async function POST(req: NextRequest) {
@@ -64,69 +81,77 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  const db = getDb();
-
   // If user is a teacher, check if they are the assigned Class Teacher for this class
   if (session.role === 'teacher') {
-    const teacher = db.prepare('SELECT id FROM teachers WHERE user_id = ?').get(session.userId) as any;
+    const teacherResult = await db.select({ id: teachers.id }).from(teachers).where(eq(teachers.user_id, session.userId)).limit(1);
+    const teacher = teacherResult[0];
     if (!teacher) return NextResponse.json({ error: 'Teacher profile not found' }, { status: 404 });
 
-    const assignment = db.prepare(`
-      SELECT id FROM teacher_assignments 
-      WHERE teacher_id = ? AND class_id = ? AND session_id = ? AND subject_id IS NULL
-    `).get(teacher.id, classId, sessionId);
+    const assignmentResult = await db.select({ id: teacherAssignments.id }).from(teacherAssignments).where(
+      and(
+        eq(teacherAssignments.teacher_id, teacher.id),
+        eq(teacherAssignments.class_id, classId),
+        eq(teacherAssignments.session_id, sessionId),
+        isNull(teacherAssignments.subject_id)
+      )
+    ).limit(1);
 
-    if (!assignment) {
+    if (assignmentResult.length === 0) {
       return NextResponse.json({ error: 'You are not assigned as the Class Teacher for this class' }, { status: 403 });
     }
   }
 
   try {
-    const transaction = db.transaction(() => {
+    await db.transaction(async (tx) => {
       // 1. Batch Update Class Settings (Date, Signature, Next Term Starts)
       if (settings) {
         const { date, signature, nextTermStarts, coordinatorRemark, coordinatorSignature, coordinatorDate } = settings;
         const isTeacher = session.role === 'teacher';
         
         // Get all students in this class to update their individual records
-        const students = db.prepare('SELECT id FROM students WHERE class_id = ? AND school_id = ?').all(classId, schoolId) as any[];
+        const classStudents = await tx.select({ id: students.id }).from(students).where(
+          and(eq(students.class_id, classId), eq(students.school_id, schoolId || ''))
+        );
 
-        for (const student of students) {
-          const existing = db.prepare(`
-            SELECT id FROM teacher_comments 
-            WHERE student_id = ? AND session_id = ? AND term = ? AND school_id = ?
-          `).get(student.id, sessionId, term, schoolId) as any;
+        for (const student of classStudents) {
+          const existingResult = await tx.select({ id: teacherComments.id }).from(teacherComments).where(
+            and(
+              eq(teacherComments.student_id, student.id),
+              eq(teacherComments.session_id, sessionId),
+              eq(teacherComments.term, term),
+              eq(teacherComments.school_id, schoolId || '')
+            )
+          ).limit(1);
+          const existing = existingResult[0];
 
           if (existing) {
-            // If teacher, only update class teacher specific fields
-            if (isTeacher) {
-              db.prepare(`
-                UPDATE teacher_comments 
-                SET class_teacher_date = ?, class_teacher_signature = ?, next_term_starts = ?
-                WHERE id = ?
-              `).run(date, signature, nextTermStarts, existing.id);
-            } else {
-              db.prepare(`
-                UPDATE teacher_comments 
-                SET class_teacher_date = ?, class_teacher_signature = ?, next_term_starts = ?, 
-                    coordinator_remark = ?, coordinator_signature = ?, coordinator_date = ?
-                WHERE id = ?
-              `).run(date, signature, nextTermStarts, coordinatorRemark, coordinatorSignature, coordinatorDate, existing.id);
+            const updateData: any = {
+              class_teacher_date: date,
+              class_teacher_signature: signature,
+              next_term_starts: nextTermStarts
+            };
+
+            if (!isTeacher) {
+              updateData.coordinator_remark = coordinatorRemark;
+              updateData.coordinator_signature = coordinatorSignature;
+              updateData.coordinator_date = coordinatorDate;
             }
+
+            await tx.update(teacherComments).set(updateData).where(eq(teacherComments.id, existing.id));
           } else {
-            // New entry: only add coordinator fields if not a teacher
-            db.prepare(`
-              INSERT INTO teacher_comments (
-                id, school_id, student_id, session_id, term, 
-                class_teacher_date, class_teacher_signature, next_term_starts,
-                coordinator_remark, coordinator_signature, coordinator_date
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(
-              uuidv4(), schoolId, student.id, sessionId, term, date, signature, nextTermStarts, 
-              isTeacher ? null : coordinatorRemark, 
-              isTeacher ? null : coordinatorSignature, 
-              isTeacher ? null : coordinatorDate
-            );
+            await tx.insert(teacherComments).values({
+              id: uuidv4(),
+              school_id: schoolId || '',
+              student_id: student.id,
+              session_id: sessionId,
+              term,
+              class_teacher_date: date,
+              class_teacher_signature: signature,
+              next_term_starts: nextTermStarts,
+              coordinator_remark: isTeacher ? null : coordinatorRemark,
+              coordinator_signature: isTeacher ? null : coordinatorSignature,
+              coordinator_date: isTeacher ? null : coordinatorDate
+            });
           }
         }
       }
@@ -137,40 +162,45 @@ export async function POST(req: NextRequest) {
         for (const item of individualComments) {
           const { studentId, comment, coordinatorRemark } = item;
           
-          const existing = db.prepare(`
-            SELECT id FROM teacher_comments 
-            WHERE student_id = ? AND session_id = ? AND term = ? AND school_id = ?
-          `).get(studentId, sessionId, term, schoolId) as any;
+          const existingResult = await tx.select({ id: teacherComments.id }).from(teacherComments).where(
+            and(
+              eq(teacherComments.student_id, studentId),
+              eq(teacherComments.session_id, sessionId),
+              eq(teacherComments.term, term),
+              eq(teacherComments.school_id, schoolId || '')
+            )
+          ).limit(1);
+          const existing = existingResult[0];
 
           if (existing) {
-            if (isTeacher) {
-              db.prepare(`
-                UPDATE teacher_comments 
-                SET class_teacher_comment = ?
-                WHERE id = ?
-              `).run(comment, existing.id);
-            } else {
-              db.prepare(`
-                UPDATE teacher_comments 
-                SET class_teacher_comment = ?, coordinator_remark = COALESCE(?, coordinator_remark)
-                WHERE id = ?
-              `).run(comment, coordinatorRemark || null, existing.id);
+            const updateData: any = {
+              class_teacher_comment: comment
+            };
+
+            if (!isTeacher) {
+              updateData.coordinator_remark = coordinatorRemark || null; // Simplified logic compared to original's COALESCE
             }
+
+            await tx.update(teacherComments).set(updateData).where(eq(teacherComments.id, existing.id));
           } else {
-            db.prepare(`
-              INSERT INTO teacher_comments (
-                id, school_id, student_id, session_id, term, class_teacher_comment, coordinator_remark
-              ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            `).run(uuidv4(), schoolId, studentId, sessionId, term, comment, isTeacher ? null : (coordinatorRemark || null));
+            await tx.insert(teacherComments).values({
+              id: uuidv4(),
+              school_id: schoolId || '',
+              student_id: studentId,
+              session_id: sessionId,
+              term,
+              class_teacher_comment: comment,
+              coordinator_remark: isTeacher ? null : (coordinatorRemark || null)
+            });
           }
         }
       }
     });
 
-    transaction();
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Comments update error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

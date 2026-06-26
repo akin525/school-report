@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { subjects, students, classSubjects } from '@/lib/schema';
+import { eq, and, asc, ne, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -9,41 +11,56 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const schoolId = searchParams.get('schoolId') || session.schoolId;
-  const category = searchParams.get('category');
+  const category = searchParams.get('category') as 'nursery' | 'primary' | 'secondary' | null;
   const classId = searchParams.get('classId');
-
-  const db = getDb();
 
   // Security check: Students should only see subjects for their own class
   if (session.role === 'student') {
-    const student = db.prepare('SELECT class_id FROM students WHERE user_id = ?').get(session.userId) as any;
-    if (!student) return NextResponse.json([]);
-    const subjects = db.prepare(`
-      SELECT s.* FROM subjects s
-      JOIN class_subjects cs ON cs.subject_id = s.id
-      WHERE cs.class_id = ? AND s.school_id = ?
-      ORDER BY s.name
-    `).all(student.class_id, schoolId);
-    return NextResponse.json(subjects);
+    const studentResult = await db.select({ class_id: students.class_id }).from(students).where(eq(students.user_id, session.userId)).limit(1);
+    const student = studentResult[0];
+    if (!student?.class_id) return NextResponse.json([]);
+
+    const results = await db.select({
+      id: subjects.id,
+      school_id: subjects.school_id,
+      name: subjects.name,
+      code: subjects.code,
+      category: subjects.category,
+      created_at: subjects.created_at
+    })
+      .from(subjects)
+      .innerJoin(classSubjects, eq(classSubjects.subject_id, subjects.id))
+      .where(and(eq(classSubjects.class_id, student.class_id), eq(subjects.school_id, schoolId || '')))
+      .orderBy(asc(subjects.name));
+
+    return NextResponse.json(results);
   }
 
   if (classId) {
-    const subjects = db.prepare(`
-      SELECT s.* FROM subjects s
-      JOIN class_subjects cs ON cs.subject_id = s.id
-      WHERE cs.class_id = ? AND s.school_id = ?
-      ORDER BY s.name
-    `).all(classId, schoolId);
-    return NextResponse.json(subjects);
+    const results = await db.select({
+      id: subjects.id,
+      school_id: subjects.school_id,
+      name: subjects.name,
+      code: subjects.code,
+      category: subjects.category,
+      created_at: subjects.created_at
+    })
+      .from(subjects)
+      .innerJoin(classSubjects, eq(classSubjects.subject_id, subjects.id))
+      .where(and(eq(classSubjects.class_id, classId), eq(subjects.school_id, schoolId || '')))
+      .orderBy(asc(subjects.name));
+
+    return NextResponse.json(results);
   }
 
-  let query = 'SELECT * FROM subjects WHERE school_id = ?';
-  const params: any[] = [schoolId];
-  if (category) { query += ' AND category = ?'; params.push(category); }
-  query += ' ORDER BY category, name';
+  const filters = [eq(subjects.school_id, schoolId || '')];
+  if (category) filters.push(eq(subjects.category, category));
 
-  const subjects = db.prepare(query).all(...params);
-  return NextResponse.json(subjects);
+  const results = await db.select().from(subjects)
+    .where(and(...filters))
+    .orderBy(asc(subjects.category), asc(subjects.name));
+
+  return NextResponse.json(results);
 }
 
 export async function POST(req: NextRequest) {
@@ -54,21 +71,30 @@ export async function POST(req: NextRequest) {
     const { name, code, category, schoolId } = await req.json();
     const sId = schoolId || session.schoolId;
 
-    const db = getDb();
-    
     // Check for existing subject with same name and category
-    const existing = db.prepare('SELECT id FROM subjects WHERE school_id = ? AND name = ? AND category = ?')
-      .get(sId, name, category || 'secondary');
+    const existingResult = await db.select({ id: subjects.id }).from(subjects).where(
+      and(
+        eq(subjects.school_id, sId || ''),
+        eq(subjects.name, name),
+        eq(subjects.category, category || 'secondary')
+      )
+    ).limit(1);
     
-    if (existing) {
+    if (existingResult.length > 0) {
       return NextResponse.json({ error: `Subject "${name}" already exists in this category` }, { status: 400 });
     }
 
     const id = uuidv4();
-    db.prepare('INSERT INTO subjects (id, school_id, name, code, category) VALUES (?, ?, ?, ?, ?)')
-      .run(id, sId, name, code || '', category || 'secondary');
+    await db.insert(subjects).values({
+      id,
+      school_id: sId,
+      name,
+      code: code || '',
+      category: category || 'secondary'
+    });
 
-    return NextResponse.json(db.prepare('SELECT * FROM subjects WHERE id=?').get(id), { status: 201 });
+    const newSubject = await db.select().from(subjects).where(eq(subjects.id, id)).limit(1);
+    return NextResponse.json(newSubject[0], { status: 201 });
   } catch (error: any) {
     console.error('SUBJECT_POST_ERROR:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -81,18 +107,35 @@ export async function PUT(req: NextRequest) {
     if (!session || session.role === 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id, name, code, category } = await req.json();
-    const db = getDb();
 
     // Check for existing subject with same name and category (excluding self)
-    const existing = db.prepare('SELECT id FROM subjects WHERE name = ? AND category = ? AND id != ? AND school_id = (SELECT school_id FROM subjects WHERE id = ?)')
-      .get(name, category, id, id);
+    const currentSubjectResult = await db.select({ school_id: subjects.school_id }).from(subjects).where(eq(subjects.id, id)).limit(1);
+    const currentSubject = currentSubjectResult[0];
+
+    if (!currentSubject) return NextResponse.json({ error: 'Subject not found' }, { status: 404 });
+
+    const existingResult = await db.select({ id: subjects.id }).from(subjects).where(
+      and(
+        eq(subjects.name, name),
+        eq(subjects.category, category),
+        ne(subjects.id, id),
+        eq(subjects.school_id, currentSubject.school_id)
+      )
+    ).limit(1);
     
-    if (existing) {
+    if (existingResult.length > 0) {
       return NextResponse.json({ error: `Subject "${name}" already exists in this category` }, { status: 400 });
     }
 
-    db.prepare('UPDATE subjects SET name=?, code=?, category=? WHERE id=?').run(name, code, category, id);
-    return NextResponse.json(db.prepare('SELECT * FROM subjects WHERE id=?').get(id));
+    await db.update(subjects).set({
+      name,
+      code,
+      category,
+      // updated_at is handled by default in schema if we had it, but subjects doesn't have it in schema.ts yet
+    }).where(eq(subjects.id, id));
+
+    const updatedSubject = await db.select().from(subjects).where(eq(subjects.id, id)).limit(1);
+    return NextResponse.json(updatedSubject[0]);
   } catch (error: any) {
     console.error('SUBJECT_PUT_ERROR:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -104,7 +147,6 @@ export async function DELETE(req: NextRequest) {
   if (!session || session.role === 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id } = await req.json();
-  const db = getDb();
-  db.prepare('DELETE FROM subjects WHERE id=?').run(id);
+  await db.delete(subjects).where(eq(subjects.id, id));
   return NextResponse.json({ success: true });
 }

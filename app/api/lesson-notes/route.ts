@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { db } from '@/lib/db';
+import { lessonNotes, teachers, subjects, classes, sessions, students } from '@/lib/schema';
+import { eq, and, desc, getTableColumns } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { getSession } from '@/lib/auth';
 
@@ -22,51 +24,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'School ID is required' }, { status: 400 });
     }
 
-    const db = getDb();
-
     let actualClassId = classId;
     if (session.role === 'student' && session.userId) {
-      const student = db.prepare('SELECT class_id FROM students WHERE user_id = ?').get(session.userId) as any;
+      const studentResult = await db.select({ class_id: students.class_id }).from(students).where(eq(students.user_id, session.userId)).limit(1);
+      const student = studentResult[0];
       if (student) actualClassId = student.class_id;
     }
 
-    let query = `
-      SELECT ln.*, t.name as teacher_name, s.name as subject_name, c.name as class_name, 
-             c.arm as class_arm, sess.name as session_name
-      FROM lesson_notes ln
-      LEFT JOIN teachers t ON ln.teacher_id = t.id
-      LEFT JOIN subjects s ON ln.subject_id = s.id
-      LEFT JOIN classes c ON ln.class_id = c.id
-      LEFT JOIN sessions sess ON ln.session_id = sess.id
-      WHERE ln.school_id = ?
-    `;
-    const params: any[] = [schoolId];
+    const filters = [eq(lessonNotes.school_id, schoolId)];
+    if (teacherId) filters.push(eq(lessonNotes.teacher_id, teacherId));
+    if (subjectId) filters.push(eq(lessonNotes.subject_id, subjectId));
+    if (actualClassId) filters.push(eq(lessonNotes.class_id, actualClassId));
+    if (sessionId) filters.push(eq(lessonNotes.session_id, sessionId));
+    if (term) filters.push(eq(lessonNotes.term, parseInt(term)));
 
-    if (teacherId) {
-      query += ' AND ln.teacher_id = ?';
-      params.push(teacherId);
-    }
-    if (subjectId) {
-      query += ' AND ln.subject_id = ?';
-      params.push(subjectId);
-    }
-    if (actualClassId) {
-      query += ' AND ln.class_id = ?';
-      params.push(actualClassId);
-    }
-    if (sessionId) {
-      query += ' AND ln.session_id = ?';
-      params.push(sessionId);
-    }
-    if (term) {
-      query += ' AND ln.term = ?';
-      params.push(parseInt(term));
-    }
+    const results = await db.select({
+      ...getTableColumns(lessonNotes),
+      teacher_name: teachers.name,
+      subject_name: subjects.name,
+      class_name: classes.name,
+      class_arm: classes.arm,
+      session_name: sessions.name
+    })
+      .from(lessonNotes)
+      .leftJoin(teachers, eq(teachers.id, lessonNotes.teacher_id))
+      .leftJoin(subjects, eq(subjects.id, lessonNotes.subject_id))
+      .leftJoin(classes, eq(classes.id, lessonNotes.class_id))
+      .leftJoin(sessions, eq(sessions.id, lessonNotes.session_id))
+      .where(and(...filters))
+      .orderBy(desc(lessonNotes.created_at));
 
-    query += ' ORDER BY ln.created_at DESC';
-
-    const lessonNotes = db.prepare(query).all(...params);
-    return NextResponse.json(lessonNotes);
+    return NextResponse.json(results);
   } catch (error) {
     console.error('Error fetching lesson notes:', error);
     return NextResponse.json({ error: 'Failed to fetch lesson notes' }, { status: 500 });
@@ -100,36 +88,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const db = getDb();
-    const lessonNoteId = uuidv4();
-
-    const stmt = db.prepare(`
-      INSERT INTO lesson_notes (
-        id, school_id, teacher_id, subject_id, class_id, session_id, term,
-        title, content, file_url, file_name, file_type, topic
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      lessonNoteId,
-      schoolId,
-      teacherId,
-      subjectId,
-      classId,
-      sessionId,
-      parseInt(term),
+    const id = uuidv4();
+    await db.insert(lessonNotes).values({
+      id,
+      school_id: schoolId,
+      teacher_id: teacherId,
+      subject_id: subjectId,
+      class_id: classId,
+      session_id: sessionId,
+      term: parseInt(term),
       title,
-      content || null,
-      fileUrl || null,
-      fileName || null,
-      fileType || null,
-      topic || null
-    );
+      content: content || null,
+      file_url: fileUrl || null,
+      file_name: fileName || null,
+      file_type: fileType || null,
+      topic: topic || null
+    });
 
-    const newLessonNote = db.prepare('SELECT * FROM lesson_notes WHERE id = ?').get(lessonNoteId);
-    return NextResponse.json(newLessonNote, { status: 201 });
+    const newResult = await db.select().from(lessonNotes).where(eq(lessonNotes.id, id)).limit(1);
+    return NextResponse.json(newResult[0], { status: 201 });
   } catch (error) {
     console.error('Error creating lesson note:', error);
     return NextResponse.json({ error: 'Failed to create lesson note' }, { status: 500 });
   }
 }
+

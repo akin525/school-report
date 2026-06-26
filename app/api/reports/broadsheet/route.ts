@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { calculateGrade } from '@/lib/grading';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { classes, schools, sessions, gradingSystem, teacherAssignments, teachers, students, scores, subjects } from '@/lib/schema';
+import { eq, and, isNull, desc, asc, inArray, sql } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -10,65 +12,88 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const classId = searchParams.get('classId');
   const sessionId = searchParams.get('sessionId');
-  const term = searchParams.get('term');
+  const termParam = searchParams.get('term');
   const schoolId = searchParams.get('schoolId') || session.schoolId;
 
-  if (!classId || !sessionId || !term) {
+  if (!classId || !sessionId || !termParam) {
     return NextResponse.json({ error: 'classId, sessionId and term required' }, { status: 400 });
   }
 
-  const db = getDb();
+  const term = parseInt(termParam);
 
   // Get class info
-  const classInfo = db.prepare('SELECT * FROM classes WHERE id=?').get(classId) as any;
-  const school = db.prepare('SELECT * FROM schools WHERE id=?').get(schoolId) as any;
-  const academicSession = db.prepare('SELECT * FROM sessions WHERE id=?').get(sessionId) as any;
-  const grading = db.prepare('SELECT * FROM grading_system WHERE school_id=? ORDER BY min_score DESC').all(schoolId) as any[];
+  const classInfoResult = await db.select().from(classes).where(eq(classes.id, classId)).limit(1);
+  const classInfo = classInfoResult[0];
+
+  const schoolResult = await db.select().from(schools).where(eq(schools.id, schoolId || '')).limit(1);
+  const school = schoolResult[0];
+
+  const academicSessionResult = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
+  const academicSession = academicSessionResult[0];
+
+  const grading = await db.select().from(gradingSystem)
+    .where(eq(gradingSystem.school_id, schoolId || ''))
+    .orderBy(desc(gradingSystem.min_score));
 
   // Get class teacher
-  const classTeacher = db.prepare(`
-    SELECT t.name
-    FROM teacher_assignments ta
-    JOIN teachers t ON t.id = ta.teacher_id
-    WHERE ta.class_id = ? AND ta.session_id = ? AND ta.subject_id IS NULL AND ta.school_id = ?
-  `).get(classId, sessionId, schoolId) as any;
+  const classTeacherResult = await db.select({ name: teachers.name })
+    .from(teacherAssignments)
+    .innerJoin(teachers, eq(teachers.id, teacherAssignments.teacher_id))
+    .where(and(
+      eq(teacherAssignments.class_id, classId),
+      eq(teacherAssignments.session_id, sessionId),
+      isNull(teacherAssignments.subject_id),
+      eq(teacherAssignments.school_id, schoolId || '')
+    ))
+    .limit(1);
+  const classTeacher = classTeacherResult[0];
 
   // Get all students in class
-  const students = db.prepare(`
-    SELECT * FROM students WHERE class_id=? AND school_id=? ORDER BY last_name, first_name
-  `).all(classId, schoolId) as any[];
+  const classStudents = await db.select().from(students)
+    .where(and(eq(students.class_id, classId), eq(students.school_id, schoolId || '')))
+    .orderBy(asc(students.last_name), asc(students.first_name));
 
-  // Get all subjects for this class
-  const subjects = db.prepare(`
-    SELECT DISTINCT sub.id, sub.name, sub.category
-    FROM scores sc
-    JOIN subjects sub ON sub.id = sc.subject_id
-    WHERE sc.class_id=? AND sc.session_id=? AND sc.term=? AND sc.school_id=?
-    ORDER BY sub.name
-  `).all(classId, sessionId, parseInt(term), schoolId) as any[];
+  // Get all subjects that have scores for this class/term
+  const subjectsWithScores = await db.selectDistinct({
+    id: subjects.id,
+    name: subjects.name,
+    category: subjects.category
+  })
+    .from(scores)
+    .innerJoin(subjects, eq(subjects.id, scores.subject_id))
+    .where(and(
+      eq(scores.class_id, classId),
+      eq(scores.session_id, sessionId),
+      eq(scores.term, term),
+      eq(scores.school_id, schoolId || '')
+    ))
+    .orderBy(asc(subjects.name));
 
   // Get all scores
-  const allScores = db.prepare(`
-    SELECT * FROM scores
-    WHERE class_id=? AND session_id=? AND term=? AND school_id=?
-  `).all(classId, sessionId, parseInt(term), schoolId) as any[];
+  const allScores = await db.select().from(scores)
+    .where(and(
+      eq(scores.class_id, classId),
+      eq(scores.session_id, sessionId),
+      eq(scores.term, term),
+      eq(scores.school_id, schoolId || '')
+    ));
 
   // Build broadsheet data
-  const broadsheetRaw = students.map(student => {
+  const broadsheetRaw = classStudents.map(student => {
     const studentScores: Record<string, any> = {};
     let grandTotal = 0;
     let subjectCount = 0;
 
-    for (const subject of subjects) {
+    for (const subject of subjectsWithScores) {
       const score = allScores.find(s => s.student_id === student.id && s.subject_id === subject.id);
       if (score) {
         studentScores[subject.id] = {
-          ca: score.ca_score,
+          ca: score.ca1_score! + (score.ca2_score || 0), // Adjust based on how 'total' was handled in SQLite
           exam: score.exam_score,
           total: score.total,
-          grade: calculateGrade(score.total, 100, grading).grade,
+          grade: calculateGrade(score.total || 0, 100, grading).grade,
         };
-        grandTotal += score.total;
+        grandTotal += score.total || 0;
         subjectCount++;
       } else {
         studentScores[subject.id] = null;
@@ -94,7 +119,7 @@ export async function GET(req: NextRequest) {
   }));
 
   // Calculate subject positions
-  for (const subject of subjects) {
+  for (const subject of subjectsWithScores) {
     const subjectScores = broadsheet
       .filter(r => r.scores[subject.id] !== null)
       .sort((a, b) => (b.scores[subject.id]?.total || 0) - (a.scores[subject.id]?.total || 0));
@@ -116,9 +141,9 @@ export async function GET(req: NextRequest) {
     grading,
     class: classInfo,
     classTeacher: classTeacher || null,
-    term: parseInt(term),
-    subjects,
+    term,
+    subjects: subjectsWithScores,
     broadsheet,
-    classSize: students.length,
+    classSize: classStudents.length,
   });
 }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { students, exams, examSubmissions, questionBank } from '@/lib/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(req: NextRequest) {
@@ -11,14 +13,14 @@ export async function POST(req: NextRequest) {
     const { examId, answers } = await req.json();
     if (!examId || !answers) return NextResponse.json({ error: 'Missing examId or answers' }, { status: 400 });
 
-    const db = getDb();
-
     // Get student record
-    const student = db.prepare('SELECT id, class_id FROM students WHERE user_id = ?').get(session.userId) as any;
+    const studentResult = await db.select({ id: students.id, class_id: students.class_id }).from(students).where(eq(students.user_id, session.userId)).limit(1);
+    const student = studentResult[0];
     if (!student) return NextResponse.json({ error: 'Student record not found' }, { status: 404 });
 
     // Verify exam and time
-    const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(examId) as any;
+    const examResult = await db.select().from(exams).where(eq(exams.id, examId)).limit(1);
+    const exam = examResult[0];
     if (!exam) return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
 
     const now = new Date();
@@ -28,31 +30,39 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if already submitted
-    const existing = db.prepare('SELECT id FROM exam_submissions WHERE exam_id = ? AND student_id = ?').get(examId, student.id);
-    if (existing) return NextResponse.json({ error: 'Already submitted' }, { status: 400 });
+    const existingResult = await db.select({ id: examSubmissions.id }).from(examSubmissions).where(
+      and(
+        eq(examSubmissions.exam_id, examId),
+        eq(examSubmissions.student_id, student.id)
+      )
+    ).limit(1);
+
+    if (existingResult.length > 0) return NextResponse.json({ error: 'Already submitted' }, { status: 400 });
 
     // Calculate score
     const questionIds = Object.keys(answers);
     let score = 0;
 
     if (questionIds.length > 0) {
-      const placeholders = questionIds.map(() => '?').join(',');
-      const correctAnswers = db.prepare(`
-        SELECT id, correct_answer, marks FROM question_bank WHERE id IN (${placeholders})
-      `).all(...questionIds) as any[];
+      const correctAnswers = await db.select({ id: questionBank.id, correct_answer: questionBank.correct_answer, marks: questionBank.marks })
+        .from(questionBank)
+        .where(inArray(questionBank.id, questionIds));
 
       for (const q of correctAnswers) {
         if (q.correct_answer === answers[q.id]) {
-          score += q.marks;
+          score += q.marks || 1;
         }
       }
     }
 
     const submissionId = uuidv4();
-    db.prepare(`
-      INSERT INTO exam_submissions (id, exam_id, student_id, score, answers)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(submissionId, examId, student.id, score, JSON.stringify(answers));
+    await db.insert(examSubmissions).values({
+      id: submissionId,
+      exam_id: examId,
+      student_id: student.id,
+      score,
+      answers: answers
+    });
 
     return NextResponse.json({ success: true, score });
   } catch (error: any) {
@@ -60,3 +70,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+

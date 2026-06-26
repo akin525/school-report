@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { scores, subjects, students } from '@/lib/schema';
+import { eq, and, asc, getTableColumns, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -15,31 +17,35 @@ export async function GET(req: NextRequest) {
   const term = searchParams.get('term');
   const subjectId = searchParams.get('subjectId');
 
-  const db = getDb();
-
   // Security check: Students can only see their own scores
   if (session.role === 'student') {
-    const student = db.prepare('SELECT id FROM students WHERE user_id = ?').get(session.userId) as any;
+    const studentResult = await db.select({ id: students.id }).from(students).where(eq(students.user_id, session.userId)).limit(1);
+    const student = studentResult[0];
     if (!student) return NextResponse.json({ error: 'Student record not found' }, { status: 404 });
     studentId = student.id;
   }
-  let query = `
-    SELECT sc.*, s.name as subject_name, st.first_name, st.last_name, st.admission_number
-    FROM scores sc
-    JOIN subjects s ON s.id = sc.subject_id
-    JOIN students st ON st.id = sc.student_id
-    WHERE sc.school_id = ?
-  `;
-  const params: any[] = [schoolId];
 
-  if (studentId) { query += ' AND sc.student_id = ?'; params.push(studentId); }
-  if (classId) { query += ' AND sc.class_id = ?'; params.push(classId); }
-  if (sessionId) { query += ' AND sc.session_id = ?'; params.push(sessionId); }
-  if (term) { query += ' AND sc.term = ?'; params.push(parseInt(term)); }
-  if (subjectId) { query += ' AND sc.subject_id = ?'; params.push(subjectId); }
-  query += ' ORDER BY st.last_name, st.first_name, s.name';
+  const filters = [eq(scores.school_id, schoolId || '')];
+  if (studentId) filters.push(eq(scores.student_id, studentId));
+  if (classId) filters.push(eq(scores.class_id, classId));
+  if (sessionId) filters.push(eq(scores.session_id, sessionId));
+  if (term) filters.push(eq(scores.term, parseInt(term)));
+  if (subjectId) filters.push(eq(scores.subject_id, subjectId));
 
-  return NextResponse.json(db.prepare(query).all(...params));
+  const results = await db.select({
+    ...getTableColumns(scores),
+    subject_name: subjects.name,
+    first_name: students.first_name,
+    last_name: students.last_name,
+    admission_number: students.admission_number
+  })
+    .from(scores)
+    .innerJoin(subjects, eq(subjects.id, scores.subject_id))
+    .innerJoin(students, eq(students.id, scores.student_id))
+    .where(and(...filters))
+    .orderBy(asc(students.last_name), asc(students.first_name), asc(subjects.name));
+
+  return NextResponse.json(results);
 }
 
 export async function POST(req: NextRequest) {
@@ -51,44 +57,52 @@ export async function POST(req: NextRequest) {
     t1, t2, t3, t4, t5, t6, t7, t8, t9, t10 } = body;
   const sId = schoolId || session.schoolId;
 
-  const db = getDb();
-  // Upsert
-  const existing = db.prepare('SELECT id FROM scores WHERE student_id=? AND subject_id=? AND session_id=? AND term=?')
-    .get(studentId, subjectId, sessionId, term) as any;
+  // Upsert logic
+  const existingResult = await db.select({ id: scores.id }).from(scores).where(
+    and(
+      eq(scores.student_id, studentId),
+      eq(scores.subject_id, subjectId),
+      eq(scores.session_id, sessionId),
+      eq(scores.term, term)
+    )
+  ).limit(1);
+  const existing = existingResult[0];
+
+  const scoreData = {
+    ca1_score: ca1_score ?? 0,
+    ca2_score: ca2_score ?? 0,
+    exam_score: exam_score ?? 0,
+    t1: (t1 === '' || t1 === undefined) ? null : t1,
+    t2: (t2 === '' || t2 === undefined) ? null : t2,
+    t3: (t3 === '' || t3 === undefined) ? null : t3,
+    t4: (t4 === '' || t4 === undefined) ? null : t4,
+    t5: (t5 === '' || t5 === undefined) ? null : t5,
+    t6: (t6 === '' || t6 === undefined) ? null : t6,
+    t7: (t7 === '' || t7 === undefined) ? null : t7,
+    t8: (t8 === '' || t8 === undefined) ? null : t8,
+    t9: (t9 === '' || t9 === undefined) ? null : t9,
+    t10: (t10 === '' || t10 === undefined) ? null : t10,
+    updated_at: new Date()
+  };
 
   if (existing) {
-    db.prepare(`UPDATE scores SET ca1_score=?, ca2_score=?, exam_score=?, 
-      t1=?, t2=?, t3=?, t4=?, t5=?, t6=?, t7=?, t8=?, t9=?, t10=?, 
-      updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-      .run(ca1_score ?? 0, ca2_score ?? 0, exam_score ?? 0, 
-        (t1 === '' || t1 === undefined) ? null : t1, 
-        (t2 === '' || t2 === undefined) ? null : t2, 
-        (t3 === '' || t3 === undefined) ? null : t3, 
-        (t4 === '' || t4 === undefined) ? null : t4, 
-        (t5 === '' || t5 === undefined) ? null : t5, 
-        (t6 === '' || t6 === undefined) ? null : t6, 
-        (t7 === '' || t7 === undefined) ? null : t7, 
-        (t8 === '' || t8 === undefined) ? null : t8, 
-        (t9 === '' || t9 === undefined) ? null : t9, 
-        (t10 === '' || t10 === undefined) ? null : t10,
-        existing.id);
-    return NextResponse.json(db.prepare('SELECT * FROM scores WHERE id=?').get(existing.id));
+    await db.update(scores).set(scoreData).where(eq(scores.id, existing.id));
+    const updated = await db.select().from(scores).where(eq(scores.id, existing.id)).limit(1);
+    return NextResponse.json(updated[0]);
   } else {
     const id = uuidv4();
-    db.prepare(`INSERT INTO scores (id, school_id, student_id, subject_id, class_id, session_id, term, ca1_score, ca2_score, exam_score,
-      t1, t2, t3, t4, t5, t6, t7, t8, t9, t10) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(id, sId, studentId, subjectId, classId, sessionId, term, ca1_score ?? 0, ca2_score ?? 0, exam_score ?? 0,
-        (t1 === '' || t1 === undefined) ? null : t1, 
-        (t2 === '' || t2 === undefined) ? null : t2, 
-        (t3 === '' || t3 === undefined) ? null : t3, 
-        (t4 === '' || t4 === undefined) ? null : t4, 
-        (t5 === '' || t5 === undefined) ? null : t5, 
-        (t6 === '' || t6 === undefined) ? null : t6, 
-        (t7 === '' || t7 === undefined) ? null : t7, 
-        (t8 === '' || t8 === undefined) ? null : t8, 
-        (t9 === '' || t9 === undefined) ? null : t9, 
-        (t10 === '' || t10 === undefined) ? null : t10);
-    return NextResponse.json(db.prepare('SELECT * FROM scores WHERE id=?').get(id), { status: 201 });
+    await db.insert(scores).values({
+      id,
+      school_id: sId,
+      student_id: studentId,
+      subject_id: subjectId,
+      class_id: classId,
+      session_id: sessionId,
+      term,
+      ...scoreData
+    });
+    const created = await db.select().from(scores).where(eq(scores.id, id)).limit(1);
+    return NextResponse.json(created[0], { status: 201 });
   }
 }
 
@@ -96,50 +110,55 @@ export async function PUT(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { scores, schoolId } = await req.json(); // bulk update
+  const { scores: scoreList, schoolId } = await req.json(); // bulk update
   const sId = schoolId || session.schoolId;
-  const db = getDb();
 
-  const upsert = db.transaction((scoreList: any[]) => {
+  await db.transaction(async (tx) => {
     for (const sc of scoreList) {
-      const existing = db.prepare('SELECT id FROM scores WHERE student_id=? AND subject_id=? AND session_id=? AND term=?')
-        .get(sc.studentId, sc.subjectId, sc.sessionId, sc.term) as any;
+      const existingResult = await tx.select({ id: scores.id }).from(scores).where(
+        and(
+          eq(scores.student_id, sc.studentId),
+          eq(scores.subject_id, sc.subjectId),
+          eq(scores.session_id, sc.sessionId),
+          eq(scores.term, sc.term)
+        )
+      ).limit(1);
+      const existing = existingResult[0];
+
+      const scoreData = {
+        ca1_score: sc.ca1_score ?? 0,
+        ca2_score: sc.ca2_score ?? 0,
+        exam_score: sc.exam_score ?? 0,
+        t1: (sc.t1 === '' || sc.t1 === undefined) ? null : sc.t1,
+        t2: (sc.t2 === '' || sc.t2 === undefined) ? null : sc.t2,
+        t3: (sc.t3 === '' || sc.t3 === undefined) ? null : sc.t3,
+        t4: (sc.t4 === '' || sc.t4 === undefined) ? null : sc.t4,
+        t5: (sc.t5 === '' || sc.t5 === undefined) ? null : sc.t5,
+        t6: (sc.t6 === '' || sc.t6 === undefined) ? null : sc.t6,
+        t7: (sc.t7 === '' || sc.t7 === undefined) ? null : sc.t7,
+        t8: (sc.t8 === '' || sc.t8 === undefined) ? null : sc.t8,
+        t9: (sc.t9 === '' || sc.t9 === undefined) ? null : sc.t9,
+        t10: (sc.t10 === '' || sc.t10 === undefined) ? null : sc.t10,
+        updated_at: new Date()
+      };
+
       if (existing) {
-        db.prepare(`UPDATE scores SET ca1_score=?, ca2_score=?, exam_score=?, 
-          t1=?, t2=?, t3=?, t4=?, t5=?, t6=?, t7=?, t8=?, t9=?, t10=?, 
-          updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-          .run(sc.ca1_score ?? 0, sc.ca2_score ?? 0, sc.exam_score ?? 0, 
-            (sc.t1 === '' || sc.t1 === undefined) ? null : sc.t1, 
-            (sc.t2 === '' || sc.t2 === undefined) ? null : sc.t2, 
-            (sc.t3 === '' || sc.t3 === undefined) ? null : sc.t3, 
-            (sc.t4 === '' || sc.t4 === undefined) ? null : sc.t4, 
-            (sc.t5 === '' || sc.t5 === undefined) ? null : sc.t5, 
-            (sc.t6 === '' || sc.t6 === undefined) ? null : sc.t6, 
-            (sc.t7 === '' || sc.t7 === undefined) ? null : sc.t7, 
-            (sc.t8 === '' || sc.t8 === undefined) ? null : sc.t8, 
-            (sc.t9 === '' || sc.t9 === undefined) ? null : sc.t9, 
-            (sc.t10 === '' || sc.t10 === undefined) ? null : sc.t10,
-            existing.id);
+        await tx.update(scores).set(scoreData).where(eq(scores.id, existing.id));
       } else {
-        const id = uuidv4();
-        db.prepare(`INSERT INTO scores (id, school_id, student_id, subject_id, class_id, session_id, term, ca1_score, ca2_score, exam_score,
-          t1, t2, t3, t4, t5, t6, t7, t8, t9, t10) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-          .run(id, sId, sc.studentId, sc.subjectId, sc.classId, sc.sessionId, sc.term, sc.ca1_score ?? 0, sc.ca2_score ?? 0, sc.exam_score ?? 0,
-            (sc.t1 === '' || sc.t1 === undefined) ? null : sc.t1, 
-            (sc.t2 === '' || sc.t2 === undefined) ? null : sc.t2, 
-            (sc.t3 === '' || sc.t3 === undefined) ? null : sc.t3, 
-            (sc.t4 === '' || sc.t4 === undefined) ? null : sc.t4, 
-            (sc.t5 === '' || sc.t5 === undefined) ? null : sc.t5, 
-            (sc.t6 === '' || sc.t6 === undefined) ? null : sc.t6, 
-            (sc.t7 === '' || sc.t7 === undefined) ? null : sc.t7, 
-            (sc.t8 === '' || sc.t8 === undefined) ? null : sc.t8, 
-            (sc.t9 === '' || sc.t9 === undefined) ? null : sc.t9, 
-            (sc.t10 === '' || sc.t10 === undefined) ? null : sc.t10);
+        await tx.insert(scores).values({
+          id: uuidv4(),
+          school_id: sId,
+          student_id: sc.studentId,
+          subject_id: sc.subjectId,
+          class_id: sc.classId,
+          session_id: sc.sessionId,
+          term: sc.term,
+          ...scoreData
+        });
       }
     }
   });
 
-  upsert(scores);
   return NextResponse.json({ success: true });
 }
 
@@ -147,7 +166,6 @@ export async function DELETE(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Only admins can delete scores
   if (session.role !== 'school_admin' && session.role !== 'superadmin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -156,27 +174,32 @@ export async function DELETE(req: NextRequest) {
   const studentId = searchParams.get('studentId');
   const classId = searchParams.get('classId');
   const sessionId = searchParams.get('sessionId');
-  const term = searchParams.get('term');
+  const termParam = searchParams.get('term');
   const subjectId = searchParams.get('subjectId');
   const schoolId = searchParams.get('schoolId') || session.schoolId;
 
-  if (!studentId || !classId || !sessionId || !term) {
+  if (!studentId || !classId || !sessionId || !termParam) {
     return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
   }
 
-  const db = getDb();
-  let query = 'DELETE FROM scores WHERE school_id = ? AND student_id = ? AND class_id = ? AND session_id = ? AND term = ?';
-  const params: any[] = [schoolId, studentId, classId, sessionId, parseInt(term)];
+  const term = parseInt(termParam);
+  const filters = [
+    eq(scores.school_id, schoolId || ''),
+    eq(scores.student_id, studentId),
+    eq(scores.class_id, classId),
+    eq(scores.session_id, sessionId),
+    eq(scores.term, term)
+  ];
 
   if (subjectId) {
-    query += ' AND subject_id = ?';
-    params.push(subjectId);
+    filters.push(eq(scores.subject_id, subjectId));
   }
 
-  const result = db.prepare(query).run(...params);
+  const result = await db.delete(scores).where(and(...filters));
 
   return NextResponse.json({
     success: true,
-    message: `Deleted ${result.changes} score record(s).`
+    message: `Deleted score record(s).`
   });
 }
+

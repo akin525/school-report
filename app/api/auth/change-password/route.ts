@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, hashPassword, verifyPassword } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { users } from '@/lib/schema';
+import { eq } from 'drizzle-orm';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,8 +14,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Current and new passwords required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(session.userId) as any;
+    const userResult = await db.select({ password_hash: users.password_hash }).from(users).where(eq(users.id, session.userId)).limit(1);
+    const user = userResult[0];
 
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
@@ -21,7 +23,7 @@ export async function POST(req: NextRequest) {
     if (!valid) return NextResponse.json({ error: 'Invalid current password' }, { status: 401 });
 
     const newHash = await hashPassword(newPassword);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, session.userId);
+    await db.update(users).set({ password_hash: newHash }).where(eq(users.id, session.userId));
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -29,3 +31,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+

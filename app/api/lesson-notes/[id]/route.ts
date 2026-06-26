@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { db } from '@/lib/db';
+import { lessonNotes, teachers, subjects, classes, sessions, students } from '@/lib/schema';
+import { eq, getTableColumns } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 
 export async function GET(
@@ -13,27 +15,37 @@ export async function GET(
     }
 
     const { id } = await params;
-    const db = getDb();
 
     // Security check for students
     if (session.role === 'student') {
-      const student = db.prepare('SELECT class_id FROM students WHERE user_id = ?').get(session.userId) as any;
-      const lessonNote = db.prepare('SELECT class_id FROM lesson_notes WHERE id = ?').get(id) as any;
-      if (!student || !lessonNote || student.class_id !== lessonNote.class_id) {
+      const studentResult = await db.select({ class_id: students.class_id }).from(students).where(eq(students.user_id, session.userId)).limit(1);
+      const student = studentResult[0];
+
+      const lessonNoteBasicResult = await db.select({ class_id: lessonNotes.class_id }).from(lessonNotes).where(eq(lessonNotes.id, id)).limit(1);
+      const lessonNoteBasic = lessonNoteBasicResult[0];
+
+      if (!student || !lessonNoteBasic || student.class_id !== lessonNoteBasic.class_id) {
         return NextResponse.json({ error: 'Access denied: This lesson note is not for your class' }, { status: 403 });
       }
     }
 
-    const lessonNote = db.prepare(`
-      SELECT ln.*, t.name as teacher_name, s.name as subject_name, c.name as class_name, 
-             c.arm as class_arm, sess.name as session_name
-      FROM lesson_notes ln
-      LEFT JOIN teachers t ON ln.teacher_id = t.id
-      LEFT JOIN subjects s ON ln.subject_id = s.id
-      LEFT JOIN classes c ON ln.class_id = c.id
-      LEFT JOIN sessions sess ON ln.session_id = sess.id
-      WHERE ln.id = ?
-    `).get(id);
+    const results = await db.select({
+      ...getTableColumns(lessonNotes),
+      teacher_name: teachers.name,
+      subject_name: subjects.name,
+      class_name: classes.name,
+      class_arm: classes.arm,
+      session_name: sessions.name
+    })
+      .from(lessonNotes)
+      .leftJoin(teachers, eq(teachers.id, lessonNotes.teacher_id))
+      .leftJoin(subjects, eq(subjects.id, lessonNotes.subject_id))
+      .leftJoin(classes, eq(classes.id, lessonNotes.class_id))
+      .leftJoin(sessions, eq(sessions.id, lessonNotes.session_id))
+      .where(eq(lessonNotes.id, id))
+      .limit(1);
+
+    const lessonNote = results[0];
 
     if (!lessonNote) {
       return NextResponse.json({ error: 'Lesson note not found' }, { status: 404 });
@@ -72,29 +84,29 @@ export async function PUT(
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const stmt = db.prepare(`
-      UPDATE lesson_notes 
-      SET title = ?, content = ?, file_url = ?, file_name = ?, file_type = ?, topic = ?, term = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-
-    const result = stmt.run(
+    const updateData: any = {
       title,
-      content || null,
-      fileUrl || null,
-      fileName || null,
-      fileType || null,
-      topic || null,
-      term ? parseInt(term) : null,
-      id
-    );
+      content: content || null,
+      file_url: fileUrl || null,
+      file_name: fileName || null,
+      file_type: fileType || null,
+      topic: topic || null,
+      updated_at: new Date()
+    };
 
-    if (result.changes === 0) {
+    if (term !== undefined && term !== null && term !== '') {
+      updateData.term = typeof term === 'string' ? parseInt(term) : term;
+    }
+
+    await db.update(lessonNotes).set(updateData).where(eq(lessonNotes.id, id));
+
+    const updatedResult = await db.select().from(lessonNotes).where(eq(lessonNotes.id, id)).limit(1);
+    const updatedLessonNote = updatedResult[0];
+
+    if (!updatedLessonNote) {
       return NextResponse.json({ error: 'Lesson note not found' }, { status: 404 });
     }
 
-    const updatedLessonNote = db.prepare('SELECT * FROM lesson_notes WHERE id = ?').get(id);
     return NextResponse.json(updatedLessonNote);
   } catch (error) {
     console.error('Error updating lesson note:', error);
@@ -113,12 +125,7 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const db = getDb();
-    const result = db.prepare('DELETE FROM lesson_notes WHERE id = ?').run(id);
-
-    if (result.changes === 0) {
-      return NextResponse.json({ error: 'Lesson note not found' }, { status: 404 });
-    }
+    await db.delete(lessonNotes).where(eq(lessonNotes.id, id));
 
     return NextResponse.json({ message: 'Lesson note deleted successfully' });
   } catch (error) {
@@ -126,3 +133,4 @@ export async function DELETE(
     return NextResponse.json({ error: 'Failed to delete lesson note' }, { status: 500 });
   }
 }
+

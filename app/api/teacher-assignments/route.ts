@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { db } from '@/lib/db';
+import { teacherAssignments, teachers, classes, subjects, sessions } from '@/lib/schema';
+import { eq, and, asc, getTableColumns } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
@@ -18,40 +20,48 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'School ID is required' }, { status: 400 });
     }
 
-    const db = getDb();
-    
     // If teacherId is not provided, find teacher ID from user session
     let actualTeacherId = teacherId;
     if (!actualTeacherId && session.userId) {
       // Find teacher record associated with this user
-      const teacher = db.prepare('SELECT id FROM teachers WHERE user_id = ? AND school_id = ?')
-        .get(session.userId, schoolId) as any;
-      actualTeacherId = teacher?.id;
+      const teacherResult = await db.select({ id: teachers.id }).from(teachers).where(
+        and(
+          eq(teachers.user_id, session.userId),
+          eq(teachers.school_id, schoolId)
+        )
+      ).limit(1);
+      actualTeacherId = teacherResult[0]?.id;
     }
 
-    let query = `
-      SELECT ta.*, c.name as class_name, c.arm as class_arm, s.name as subject_name,
-             sess.name as session_name, t.name as teacher_name
-      FROM teacher_assignments ta
-      LEFT JOIN classes c ON ta.class_id = c.id
-      LEFT JOIN subjects s ON ta.subject_id = s.id
-      LEFT JOIN sessions sess ON ta.session_id = sess.id
-      LEFT JOIN teachers t ON ta.teacher_id = t.id
-      WHERE ta.school_id = ? AND ta.teacher_id = ?
-    `;
-    const params: any[] = [schoolId, actualTeacherId];
+    const filters = [
+      eq(teacherAssignments.school_id, schoolId),
+      eq(teacherAssignments.teacher_id, actualTeacherId || '')
+    ];
 
     if (sessionId) {
-      query += ' AND ta.session_id = ?';
-      params.push(sessionId);
+      filters.push(eq(teacherAssignments.session_id, sessionId));
     }
 
-    query += ' ORDER BY sess.name, c.name, s.name';
+    const results = await db.select({
+      ...getTableColumns(teacherAssignments),
+      class_name: classes.name,
+      class_arm: classes.arm,
+      subject_name: subjects.name,
+      session_name: sessions.name,
+      teacher_name: teachers.name
+    })
+      .from(teacherAssignments)
+      .leftJoin(classes, eq(classes.id, teacherAssignments.class_id))
+      .leftJoin(subjects, eq(subjects.id, teacherAssignments.subject_id))
+      .leftJoin(sessions, eq(sessions.id, teacherAssignments.session_id))
+      .leftJoin(teachers, eq(teachers.id, teacherAssignments.teacher_id))
+      .where(and(...filters))
+      .orderBy(asc(sessions.name), asc(classes.name), asc(subjects.name));
 
-    const assignments = db.prepare(query).all(...params);
-    return NextResponse.json(assignments);
+    return NextResponse.json(results);
   } catch (error) {
     console.error('Error fetching teacher assignments:', error);
     return NextResponse.json({ error: 'Failed to fetch teacher assignments' }, { status: 500 });
   }
 }
+

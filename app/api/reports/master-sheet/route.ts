@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { sessions, classes, subjects, students, scores } from '@/lib/schema';
+import { eq, and, asc } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -17,37 +19,48 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'classId, sessionId, and subjectId are required' }, { status: 400 });
   }
 
-  const db = getDb();
-
   // Get session info
-  const academicSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as any;
+  const academicSessionResult = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
+  const academicSession = academicSessionResult[0];
   
   // Get class info
-  const classInfo = db.prepare('SELECT * FROM classes WHERE id = ?').get(classId) as any;
+  const classInfoResult = await db.select().from(classes).where(eq(classes.id, classId)).limit(1);
+  const classInfo = classInfoResult[0];
   
   // Get subject info
-  const subjectInfo = db.prepare('SELECT * FROM subjects WHERE id = ?').get(subjectId) as any;
+  const subjectInfoResult = await db.select().from(subjects).where(eq(subjects.id, subjectId)).limit(1);
+  const subjectInfo = subjectInfoResult[0];
 
   // Get all students in the class
-  const students = db.prepare(`
-    SELECT id, first_name, middle_name, last_name, admission_number
-    FROM students
-    WHERE class_id = ? AND school_id = ?
-    ORDER BY last_name, first_name
-  `).all(classId, schoolId) as any[];
+  const classStudents = await db.select({
+    id: students.id,
+    first_name: students.first_name,
+    middle_name: students.middle_name,
+    last_name: students.last_name,
+    admission_number: students.admission_number
+  })
+    .from(students)
+    .where(and(eq(students.class_id, classId), eq(students.school_id, schoolId || '')))
+    .orderBy(asc(students.last_name), asc(students.first_name));
 
   // Get scores for the specific subject, class, and term
-  const scores = db.prepare(`
-    SELECT * FROM scores
-    WHERE class_id = ? AND session_id = ? AND subject_id = ? AND term = ? AND school_id = ?
-  `).all(classId, sessionId, subjectId, term, schoolId) as any[];
+  const subjectScores = await db.select().from(scores).where(
+    and(
+      eq(scores.class_id, classId),
+      eq(scores.session_id, sessionId),
+      eq(scores.subject_id, subjectId),
+      eq(scores.term, term),
+      eq(scores.school_id, schoolId || '')
+    )
+  );
 
   return NextResponse.json({
     session: academicSession,
     class: classInfo,
     subject: subjectInfo,
-    students,
-    scores,
+    students: classStudents,
+    scores: subjectScores,
     term
   });
 }
+

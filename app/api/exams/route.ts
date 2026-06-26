@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { exams, subjects, classes, users, students, examSubmissions } from '@/lib/schema';
+import { eq, and, desc, getTableColumns, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -12,37 +14,52 @@ export async function GET(req: NextRequest) {
     const schoolId = searchParams.get('schoolId') || session.schoolId;
     const classId = searchParams.get('classId');
 
-    const db = getDb();
+    const submissionCountSubquery = db.select({
+      exam_id: examSubmissions.exam_id,
+      count: sql`COUNT(*)`.as('count')
+    }).from(examSubmissions).groupBy(examSubmissions.exam_id).as('sc');
 
-    let query = `
-      SELECT e.*, s.name as subject_name, c.name as class_name, u.name as creator_name,
-             (SELECT COUNT(*) FROM exam_submissions es WHERE es.exam_id = e.id) as submission_count
-      FROM exams e
-      JOIN subjects s ON s.id = e.subject_id
-      JOIN classes c ON c.id = e.class_id
-      JOIN users u ON u.id = e.created_by
-      WHERE e.school_id = ?
-    `;
-    const params: any[] = [schoolId];
+    const filters = [eq(exams.school_id, schoolId || '')];
+
+    let studentIdForScore: string | undefined;
 
     if (session.role === 'student') {
-      const student = db.prepare('SELECT class_id, id FROM students WHERE user_id = ?').get(session.userId) as any;
+      const studentResult = await db.select({ class_id: students.class_id, id: students.id }).from(students).where(eq(students.user_id, session.userId)).limit(1);
+      const student = studentResult[0];
       if (student) {
-        query += ' AND e.class_id = ?';
-        params.push(student.class_id);
-
-        // Include if student has submitted
-        query = query.replace('SELECT e.*', `SELECT e.*, (SELECT score FROM exam_submissions es WHERE es.exam_id = e.id AND es.student_id = "${student.id}") as student_score`);
+        filters.push(eq(exams.class_id, student.class_id || ''));
+        studentIdForScore = student.id;
       }
     } else if (classId) {
-      query += ' AND e.class_id = ?';
-      params.push(classId);
+      filters.push(eq(exams.class_id, classId));
     }
 
-    query += ' ORDER BY e.start_time DESC';
+    const studentScoreSubquery = studentIdForScore ?
+      db.select({
+        exam_id: examSubmissions.exam_id,
+        score: examSubmissions.score
+      }).from(examSubmissions).where(eq(examSubmissions.student_id, studentIdForScore)).as('ss') : null;
 
-    const exams = db.prepare(query).all(...params);
-    return NextResponse.json(exams);
+    let query = db.select({
+      ...getTableColumns(exams),
+      subject_name: subjects.name,
+      class_name: classes.name,
+      creator_name: users.name,
+      submission_count: sql`COALESCE(${submissionCountSubquery.count}, 0)`,
+      ...(studentScoreSubquery ? { student_score: studentScoreSubquery.score } : {})
+    })
+      .from(exams)
+      .innerJoin(subjects, eq(subjects.id, exams.subject_id))
+      .innerJoin(classes, eq(classes.id, exams.class_id))
+      .innerJoin(users, eq(users.id, exams.created_by))
+      .leftJoin(submissionCountSubquery, eq(submissionCountSubquery.exam_id, exams.id));
+
+    if (studentScoreSubquery) {
+      query = query.leftJoin(studentScoreSubquery, eq(studentScoreSubquery.exam_id, exams.id)) as any;
+    }
+
+    const results = await query.where(and(...filters)).orderBy(desc(exams.start_time));
+    return NextResponse.json(results);
   } catch (error: any) {
     console.error('EXAMS_GET_ERROR:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -61,12 +78,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const db = getDb();
     const id = uuidv4();
-    db.prepare(`
-      INSERT INTO exams (id, school_id, title, subject_id, class_id, session_id, term, start_time, end_time, duration_minutes, total_marks, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, sId, title, subject_id, class_id, session_id, term, start_time, end_time, duration_minutes, total_marks || 100, session.userId);
+    await db.insert(exams).values({
+      id,
+      school_id: sId || '',
+      title,
+      subject_id,
+      class_id,
+      session_id,
+      term,
+      start_time: new Date(start_time),
+      end_time: new Date(end_time),
+      duration_minutes,
+      total_marks: total_marks || 100,
+      created_by: session.userId
+    });
 
     return NextResponse.json({ success: true, id });
   } catch (error: any) {
@@ -74,3 +100,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+

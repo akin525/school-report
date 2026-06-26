@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { teacherAssignments, teachers, subjects, classes, sessions } from '@/lib/schema';
+import { eq, and, asc, getTableColumns, isNull } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -13,25 +15,27 @@ export async function GET(req: NextRequest) {
   const sessionId = searchParams.get('sessionId');
   const classId = searchParams.get('classId');
 
-  const db = getDb();
-  let query = `
-    SELECT ta.*, t.name as teacher_name, s.name as subject_name, c.name as class_name,
-           ses.name as session_name
-    FROM teacher_assignments ta
-    JOIN teachers t ON t.id = ta.teacher_id
-    LEFT JOIN subjects s ON s.id = ta.subject_id
-    JOIN classes c ON c.id = ta.class_id
-    JOIN sessions ses ON ses.id = ta.session_id
-    WHERE ta.school_id = ?
-  `;
-  const params: any[] = [schoolId];
+  const filters = [eq(teacherAssignments.school_id, schoolId || '')];
+  if (teacherId) filters.push(eq(teacherAssignments.teacher_id, teacherId));
+  if (sessionId) filters.push(eq(teacherAssignments.session_id, sessionId));
+  if (classId) filters.push(eq(teacherAssignments.class_id, classId));
 
-  if (teacherId) { query += ' AND ta.teacher_id = ?'; params.push(teacherId); }
-  if (sessionId) { query += ' AND ta.session_id = ?'; params.push(sessionId); }
-  if (classId) { query += ' AND ta.class_id = ?'; params.push(classId); }
-  query += ' ORDER BY t.name, s.name';
+  const results = await db.select({
+    ...getTableColumns(teacherAssignments),
+    teacher_name: teachers.name,
+    subject_name: subjects.name,
+    class_name: classes.name,
+    session_name: sessions.name
+  })
+    .from(teacherAssignments)
+    .innerJoin(teachers, eq(teachers.id, teacherAssignments.teacher_id))
+    .leftJoin(subjects, eq(subjects.id, teacherAssignments.subject_id))
+    .innerJoin(classes, eq(classes.id, teacherAssignments.class_id))
+    .innerJoin(sessions, eq(sessions.id, teacherAssignments.session_id))
+    .where(and(...filters))
+    .orderBy(asc(teachers.name), asc(subjects.name));
 
-  return NextResponse.json(db.prepare(query).all(...params));
+  return NextResponse.json(results);
 }
 
 export async function POST(req: NextRequest) {
@@ -41,21 +45,35 @@ export async function POST(req: NextRequest) {
   const { teacherId, subjectId, classId, sessionId, schoolId } = await req.json();
   const sId = schoolId || session.schoolId;
 
-  const db = getDb();
   const id = uuidv4();
   try {
     // Check if a primary teacher is already assigned to this class (subject-less)
     if (!subjectId) {
-      const existing = db.prepare('SELECT id FROM teacher_assignments WHERE teacher_id=? AND class_id=? AND session_id=? AND subject_id IS NULL')
-        .get(teacherId, classId, sessionId);
-      if (existing) return NextResponse.json({ error: 'Teacher is already assigned to this class' }, { status: 409 });
+      const existingResult = await db.select({ id: teacherAssignments.id }).from(teacherAssignments).where(
+        and(
+          eq(teacherAssignments.teacher_id, teacherId),
+          eq(teacherAssignments.class_id, classId),
+          eq(teacherAssignments.session_id, sessionId),
+          isNull(teacherAssignments.subject_id)
+        )
+      ).limit(1);
+
+      if (existingResult.length > 0) return NextResponse.json({ error: 'Teacher is already assigned to this class' }, { status: 409 });
     }
 
-    db.prepare('INSERT INTO teacher_assignments (id, school_id, teacher_id, subject_id, class_id, session_id) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(id, sId, teacherId, subjectId || null, classId, sessionId);
-    return NextResponse.json(db.prepare('SELECT * FROM teacher_assignments WHERE id=?').get(id), { status: 201 });
+    await db.insert(teacherAssignments).values({
+      id,
+      school_id: sId || '',
+      teacher_id: teacherId,
+      subject_id: subjectId || null,
+      class_id: classId,
+      session_id: sessionId
+    });
+
+    const newResult = await db.select().from(teacherAssignments).where(eq(teacherAssignments.id, id)).limit(1);
+    return NextResponse.json(newResult[0], { status: 201 });
   } catch (e: any) {
-    if (e.message?.includes('UNIQUE')) {
+    if (e.message?.includes('UNIQUE') || e.code === 'ER_DUP_ENTRY') {
       return NextResponse.json({ error: 'Assignment already exists' }, { status: 409 });
     }
     throw e;
@@ -67,7 +85,6 @@ export async function DELETE(req: NextRequest) {
   if (!session || session.role === 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id } = await req.json();
-  const db = getDb();
-  db.prepare('DELETE FROM teacher_assignments WHERE id=?').run(id);
+  await db.delete(teacherAssignments).where(eq(teacherAssignments.id, id));
   return NextResponse.json({ success: true });
 }

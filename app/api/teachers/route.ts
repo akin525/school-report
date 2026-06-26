@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, hashPassword } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { teachers, users } from '@/lib/schema';
+import { eq, and, asc, getTableColumns } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -11,15 +13,17 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const schoolId = searchParams.get('schoolId') || session.schoolId;
 
-    const db = getDb();
-    const teachers = db.prepare(`
-      SELECT t.*, u.email as user_email, u.role as user_role
-      FROM teachers t
-      LEFT JOIN users u ON u.id = t.user_id
-      WHERE t.school_id = ?
-      ORDER BY t.name
-    `).all(schoolId);
-    return NextResponse.json(teachers);
+    const results = await db.select({
+      ...getTableColumns(teachers),
+      user_email: users.email,
+      user_role: users.role
+    })
+      .from(teachers)
+      .leftJoin(users, eq(users.id, teachers.user_id))
+      .where(eq(teachers.school_id, schoolId || ''))
+      .orderBy(asc(teachers.name));
+
+    return NextResponse.json(results);
   } catch (error: any) {
     console.error('TEACHER_GET_ERROR:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -36,21 +40,35 @@ export async function POST(req: NextRequest) {
 
     if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 });
 
-    const db = getDb();
     const teacherId = uuidv4();
     let userId = null;
 
     if (createLogin && email && password) {
       userId = uuidv4();
       const hash = await hashPassword(password);
-      db.prepare('INSERT INTO users (id, school_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(userId, sId, name, email, hash, 'teacher');
+      await db.insert(users).values({
+        id: userId,
+        school_id: sId || '',
+        name,
+        email,
+        password_hash: hash,
+        role: 'teacher'
+      });
     }
 
-    db.prepare('INSERT INTO teachers (id, school_id, user_id, name, email, phone, qualification, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(teacherId, sId, userId, name, email || '', phone || '', qualification || '', category || 'secondary');
+    await db.insert(teachers).values({
+      id: teacherId,
+      school_id: sId || '',
+      user_id: userId,
+      name,
+      email: email || '',
+      phone: phone || '',
+      qualification: qualification || '',
+      category: category || 'secondary'
+    });
 
-    return NextResponse.json(db.prepare('SELECT * FROM teachers WHERE id=?').get(teacherId), { status: 201 });
+    const newTeacherResult = await db.select().from(teachers).where(eq(teachers.id, teacherId)).limit(1);
+    return NextResponse.json(newTeacherResult[0], { status: 201 });
   } catch (error: any) {
     console.error('TEACHER_POST_ERROR:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -63,10 +81,17 @@ export async function PUT(req: NextRequest) {
     if (!session || session.role === 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id, name, email, phone, qualification, category } = await req.json();
-    const db = getDb();
-    db.prepare('UPDATE teachers SET name=?, email=?, phone=?, qualification=?, category=? WHERE id=?')
-      .run(name, email, phone, qualification, category, id);
-    return NextResponse.json(db.prepare('SELECT * FROM teachers WHERE id=?').get(id));
+
+    await db.update(teachers).set({
+      name,
+      email,
+      phone,
+      qualification,
+      category
+    }).where(eq(teachers.id, id));
+
+    const updatedTeacherResult = await db.select().from(teachers).where(eq(teachers.id, id)).limit(1);
+    return NextResponse.json(updatedTeacherResult[0]);
   } catch (error: any) {
     console.error('TEACHER_PUT_ERROR:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -79,16 +104,16 @@ export async function DELETE(req: NextRequest) {
     if (!session || session.role === 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id } = await req.json();
-    const db = getDb();
-    
+
     // Get associated user ID first
-    const teacher = db.prepare('SELECT user_id FROM teachers WHERE id=?').get(id) as any;
+    const teacherResult = await db.select({ user_id: teachers.user_id }).from(teachers).where(eq(teachers.id, id)).limit(1);
+    const teacher = teacherResult[0];
     
     if (teacher?.user_id) {
-      db.prepare('DELETE FROM users WHERE id=?').run(teacher.user_id);
+      await db.delete(users).where(eq(users.id, teacher.user_id));
     }
     
-    db.prepare('DELETE FROM teachers WHERE id=?').run(id);
+    await db.delete(teachers).where(eq(teachers.id, id));
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('TEACHER_DELETE_ERROR:', error);

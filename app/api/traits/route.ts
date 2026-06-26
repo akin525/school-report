@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { affectiveTraits } from '@/lib/schema';
+import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -13,14 +15,13 @@ export async function GET(req: NextRequest) {
   const term = searchParams.get('term');
   const schoolId = searchParams.get('schoolId') || session.schoolId;
 
-  const db = getDb();
-  let query = 'SELECT * FROM affective_traits WHERE school_id = ?';
-  const params: any[] = [schoolId];
-  if (studentId) { query += ' AND student_id = ?'; params.push(studentId); }
-  if (sessionId) { query += ' AND session_id = ?'; params.push(sessionId); }
-  if (term) { query += ' AND term = ?'; params.push(parseInt(term)); }
+  const filters = [eq(affectiveTraits.school_id, schoolId || '')];
+  if (studentId) filters.push(eq(affectiveTraits.student_id, studentId));
+  if (sessionId) filters.push(eq(affectiveTraits.session_id, sessionId));
+  if (term) filters.push(eq(affectiveTraits.term, parseInt(term)));
 
-  return NextResponse.json(db.prepare(query).all(...params));
+  const results = await db.select().from(affectiveTraits).where(and(...filters));
+  return NextResponse.json(results);
 }
 
 export async function POST(req: NextRequest) {
@@ -31,18 +32,44 @@ export async function POST(req: NextRequest) {
   const { studentId, sessionId, term, homework, punctuality, interaction, leadership, politeness, conduct, schoolId } = body;
   const sId = schoolId || session.schoolId;
 
-  const db = getDb();
-  const existing = db.prepare('SELECT id FROM affective_traits WHERE student_id=? AND session_id=? AND term=?')
-    .get(studentId, sessionId, term) as any;
+  const existingResult = await db.select({ id: affectiveTraits.id }).from(affectiveTraits).where(
+    and(
+      eq(affectiveTraits.student_id, studentId),
+      eq(affectiveTraits.session_id, sessionId),
+      eq(affectiveTraits.term, term)
+    )
+  ).limit(1);
+  const existing = existingResult[0];
 
   if (existing) {
-    db.prepare('UPDATE affective_traits SET homework=?, punctuality=?, interaction=?, leadership=?, politeness=?, conduct=? WHERE id=?')
-      .run(homework, punctuality, interaction, leadership, politeness, conduct, existing.id);
-    return NextResponse.json(db.prepare('SELECT * FROM affective_traits WHERE id=?').get(existing.id));
+    await db.update(affectiveTraits).set({
+      homework,
+      punctuality,
+      interaction,
+      leadership,
+      politeness,
+      conduct
+    }).where(eq(affectiveTraits.id, existing.id));
+
+    const updated = await db.select().from(affectiveTraits).where(eq(affectiveTraits.id, existing.id)).limit(1);
+    return NextResponse.json(updated[0]);
   } else {
     const id = uuidv4();
-    db.prepare('INSERT INTO affective_traits (id, school_id, student_id, session_id, term, homework, punctuality, interaction, leadership, politeness, conduct) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(id, sId, studentId, sessionId, term, homework, punctuality, interaction, leadership, politeness, conduct);
-    return NextResponse.json(db.prepare('SELECT * FROM affective_traits WHERE id=?').get(id), { status: 201 });
+    await db.insert(affectiveTraits).values({
+      id,
+      school_id: sId || '',
+      student_id: studentId,
+      session_id: sessionId,
+      term,
+      homework,
+      punctuality,
+      interaction,
+      leadership,
+      politeness,
+      conduct
+    });
+
+    const created = await db.select().from(affectiveTraits).where(eq(affectiveTraits.id, id)).limit(1);
+    return NextResponse.json(created[0], { status: 201 });
   }
 }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { exams, students, examSubmissions, questionBank } from '@/lib/schema';
+import { eq, and } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,10 +14,9 @@ export async function GET(req: NextRequest) {
 
     if (!examId) return NextResponse.json({ error: 'examId required' }, { status: 400 });
 
-    const db = getDb();
-
     // Get exam details to check class and time
-    const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(examId) as any;
+    const examResult = await db.select().from(exams).where(eq(exams.id, examId)).limit(1);
+    const exam = examResult[0];
     if (!exam) return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
 
     const now = new Date();
@@ -24,7 +25,9 @@ export async function GET(req: NextRequest) {
 
     // If student, check if they belong to the class and if exam is active
     if (session.role === 'student') {
-      const student = db.prepare('SELECT id, class_id FROM students WHERE user_id = ?').get(session.userId) as any;
+      const studentResult = await db.select({ id: students.id, class_id: students.class_id }).from(students).where(eq(students.user_id, session.userId)).limit(1);
+      const student = studentResult[0];
+
       if (!student || student.class_id !== exam.class_id) {
         return NextResponse.json({ error: 'Unauthorized: This exam is not for your class' }, { status: 403 });
       }
@@ -33,19 +36,36 @@ export async function GET(req: NextRequest) {
       if (now > end) return NextResponse.json({ error: 'Exam has ended' }, { status: 403 });
 
       // Check if already submitted
-      const submitted = db.prepare('SELECT id FROM exam_submissions WHERE exam_id = ? AND student_id = ?').get(examId, student.id);
-      if (submitted) return NextResponse.json({ error: 'You have already submitted this exam' }, { status: 403 });
+      const submittedResult = await db.select({ id: examSubmissions.id }).from(examSubmissions).where(
+        and(
+          eq(examSubmissions.exam_id, examId),
+          eq(examSubmissions.student_id, student.id)
+        )
+      ).limit(1);
+
+      if (submittedResult.length > 0) return NextResponse.json({ error: 'You have already submitted this exam' }, { status: 403 });
     }
 
     // Get questions for the subject and class
-    // In a real system, we'd limit this or have specific questions selected for the exam
-    // For now, we'll take up to 50 questions from the bank for that subject/class/term
-    const questions = db.prepare(`
-      SELECT id, question_text, option_a, option_b, option_c, option_d, question_type, marks
-      FROM question_bank
-      WHERE subject_id = ? AND class_id = ? AND term = ?
-      LIMIT 50
-    `).all(exam.subject_id, exam.class_id, exam.term);
+    const questions = await db.select({
+      id: questionBank.id,
+      question_text: questionBank.question_text,
+      option_a: questionBank.option_a,
+      option_b: questionBank.option_b,
+      option_c: questionBank.option_c,
+      option_d: questionBank.option_d,
+      question_type: questionBank.question_type,
+      marks: questionBank.marks
+    })
+      .from(questionBank)
+      .where(
+        and(
+          eq(questionBank.subject_id, exam.subject_id),
+          eq(questionBank.class_id, exam.class_id),
+          eq(questionBank.term, exam.term)
+        )
+      )
+      .limit(50);
 
     return NextResponse.json({ exam, questions });
   } catch (error: any) {
@@ -53,3 +73,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+

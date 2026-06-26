@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { generateWithGemini } from '@/lib/ai';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { students, scores, subjects, sessions } from '@/lib/schema';
+import { eq, and, desc, getTableColumns } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,27 +16,31 @@ export async function GET(request: NextRequest) {
 
     if (!studentId) return NextResponse.json({ error: 'Student ID is required' }, { status: 400 });
 
-    const db = getDb();
-    const student = db.prepare('SELECT * FROM students WHERE id = ? AND school_id = ?').get(studentId, schoolId) as any;
+    const studentResult = await db.select().from(students).where(
+      and(eq(students.id, studentId), eq(students.school_id, schoolId || ''))
+    ).limit(1);
+    const student = studentResult[0];
 
     if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 });
 
     // Get scores for the student
-    const scores = db.prepare(`
-      SELECT sc.*, s.name as subject_name, sess.name as session_name
-      FROM scores sc
-      JOIN subjects s ON s.id = sc.subject_id
-      JOIN sessions sess ON sess.id = sc.session_id
-      WHERE sc.student_id = ? AND sc.school_id = ?
-      ORDER BY sess.name DESC, sc.term DESC
-    `).all(studentId, schoolId) as any[];
+    const studentScores = await db.select({
+      ...getTableColumns(scores),
+      subject_name: subjects.name,
+      session_name: sessions.name
+    })
+      .from(scores)
+      .innerJoin(subjects, eq(subjects.id, scores.subject_id))
+      .innerJoin(sessions, eq(sessions.id, scores.session_id))
+      .where(and(eq(scores.student_id, studentId), eq(scores.school_id, schoolId || '')))
+      .orderBy(desc(sessions.name), desc(scores.term));
 
-    if (scores.length === 0) {
+    if (studentScores.length === 0) {
       return NextResponse.json({ analysis: "No academic records found for this student to perform analysis." });
     }
 
-    const performanceData = scores.map(s =>
-      `${s.session_name} Term ${s.term} - ${s.subject_name}: CA1(${s.ca1_score}), CA2(${s.ca2_score}), Exam(${s.exam_score}) Total: ${s.ca1_score + s.ca2_score + s.exam_score}/100`
+    const performanceData = studentScores.map(s =>
+      `${s.session_name} Term ${s.term} - ${s.subject_name}: CA1(${s.ca1_score}), CA2(${s.ca2_score}), Exam(${s.exam_score}) Total: ${(s.ca1_score || 0) + (s.ca2_score || 0) + (s.exam_score || 0)}/100`
     ).join('\n');
 
     const prompt = `
@@ -61,3 +66,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'Server Error' }, { status: 500 });
   }
 }
+

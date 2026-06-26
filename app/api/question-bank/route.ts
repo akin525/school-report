@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { db } from '@/lib/db';
+import { questionBank, teachers, subjects, classes, sessions } from '@/lib/schema';
+import { eq, and, desc, getTableColumns } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { getSession } from '@/lib/auth';
 
@@ -27,55 +29,54 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'School ID is required' }, { status: 400 });
     }
 
-    const db = getDb();
-    
     // If teacherId is not provided, find teacher ID from user session
     let actualTeacherId = teacherId;
     if (!actualTeacherId && session.userId) {
       // Find teacher record associated with this user
-      const teacher = db.prepare('SELECT id FROM teachers WHERE user_id = ? AND school_id = ?')
-        .get(session.userId, schoolId) as any;
-      actualTeacherId = teacher?.id;
+      const teacherResult = await db.select({ id: teachers.id }).from(teachers).where(
+        and(
+          eq(teachers.user_id, session.userId),
+          eq(teachers.school_id, schoolId)
+        )
+      ).limit(1);
+      actualTeacherId = teacherResult[0]?.id;
     }
 
-    let query = `
-      SELECT qb.*, t.name as teacher_name, s.name as subject_name, c.name as class_name, 
-             c.arm as class_arm, sess.name as session_name
-      FROM question_bank qb
-      LEFT JOIN teachers t ON qb.teacher_id = t.id
-      LEFT JOIN subjects s ON qb.subject_id = s.id
-      LEFT JOIN classes c ON qb.class_id = c.id
-      LEFT JOIN sessions sess ON qb.session_id = sess.id
-      WHERE qb.school_id = ?
-    `;
-    const params: any[] = [schoolId];
+    const filters = [eq(questionBank.school_id, schoolId)];
 
     if (actualTeacherId) {
-      query += ' AND qb.teacher_id = ?';
-      params.push(actualTeacherId);
+      filters.push(eq(questionBank.teacher_id, actualTeacherId));
     }
-
     if (subjectId) {
-      query += ' AND qb.subject_id = ?';
-      params.push(subjectId);
+      filters.push(eq(questionBank.subject_id, subjectId));
     }
     if (classId) {
-      query += ' AND qb.class_id = ?';
-      params.push(classId);
+      filters.push(eq(questionBank.class_id, classId));
     }
     if (sessionId) {
-      query += ' AND qb.session_id = ?';
-      params.push(sessionId);
+      filters.push(eq(questionBank.session_id, sessionId));
     }
     if (term) {
-      query += ' AND qb.term = ?';
-      params.push(parseInt(term));
+      filters.push(eq(questionBank.term, parseInt(term)));
     }
 
-    query += ' ORDER BY qb.created_at DESC';
+    const results = await db.select({
+      ...getTableColumns(questionBank),
+      teacher_name: teachers.name,
+      subject_name: subjects.name,
+      class_name: classes.name,
+      class_arm: classes.arm,
+      session_name: sessions.name
+    })
+      .from(questionBank)
+      .leftJoin(teachers, eq(teachers.id, questionBank.teacher_id))
+      .leftJoin(subjects, eq(subjects.id, questionBank.subject_id))
+      .leftJoin(classes, eq(classes.id, questionBank.class_id))
+      .leftJoin(sessions, eq(sessions.id, questionBank.session_id))
+      .where(and(...filters))
+      .orderBy(desc(questionBank.created_at));
 
-    const questions = db.prepare(query).all(...params);
-    return NextResponse.json(questions);
+    return NextResponse.json(results);
   } catch (error) {
     console.error('Error fetching question bank:', error);
     return NextResponse.json({ error: 'Failed to fetch question bank' }, { status: 500 });
@@ -113,41 +114,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const db = getDb();
-    const questionId = uuidv4();
+    const id = uuidv4();
+    await db.insert(questionBank).values({
+      id,
+      school_id: schoolId,
+      teacher_id: teacherId,
+      subject_id: subjectId,
+      class_id: classId,
+      session_id: sessionId,
+      term: parseInt(term),
+      question_text: questionText,
+      option_a: optionA || null,
+      option_b: optionB || null,
+      option_c: optionC || null,
+      option_d: optionD || null,
+      correct_answer: correctAnswer,
+      question_type: questionType,
+      difficulty: difficulty,
+      marks: marks,
+      topic: topic || null
+    });
 
-    const stmt = db.prepare(`
-      INSERT INTO question_bank (
-        id, school_id, teacher_id, subject_id, class_id, session_id, term,
-        question_text, option_a, option_b, option_c, option_d, 
-        correct_answer, question_type, difficulty, marks, topic
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      questionId,
-      schoolId,
-      teacherId,
-      subjectId,
-      classId,
-      sessionId,
-      parseInt(term),
-      questionText,
-      optionA || null,
-      optionB || null,
-      optionC || null,
-      optionD || null,
-      correctAnswer,
-      questionType,
-      difficulty,
-      marks,
-      topic || null
-    );
-
-    const newQuestion = db.prepare('SELECT * FROM question_bank WHERE id = ?').get(questionId);
-    return NextResponse.json(newQuestion, { status: 201 });
+    const newQuestion = await db.select().from(questionBank).where(eq(questionBank.id, id)).limit(1);
+    return NextResponse.json(newQuestion[0], { status: 201 });
   } catch (error) {
     console.error('Error creating question:', error);
     return NextResponse.json({ error: 'Failed to create question' }, { status: 500 });
   }
 }
+

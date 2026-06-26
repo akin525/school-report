@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { announcements, users, classes } from '@/lib/schema';
+import { eq, and, or, isNull, desc, getTableColumns } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -10,36 +12,37 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const schoolId = searchParams.get('schoolId') || session.schoolId;
-    const role = searchParams.get('role');
     const classId = searchParams.get('classId');
 
-    const db = getDb();
-
-    let query = `
-      SELECT a.*, u.name as creator_name, c.name as target_class_name
-      FROM announcements a
-      JOIN users u ON u.id = a.created_by
-      LEFT JOIN classes c ON c.id = a.target_class_id
-      WHERE a.school_id = ?
-    `;
-    const params: any[] = [schoolId];
+    const filters: any[] = [eq(announcements.school_id, schoolId || '')];
 
     if (session.role === 'student') {
-      query += ' AND (target_role = "all" OR target_role = "student")';
+      const roleFilter = or(eq(announcements.target_role, 'all'), eq(announcements.target_role, 'student'));
+      if (roleFilter) filters.push(roleFilter);
+
       if (classId) {
-        query += ' AND (target_class_id IS NULL OR target_class_id = ?)';
-        params.push(classId);
+        const classFilter = or(isNull(announcements.target_class_id), eq(announcements.target_class_id, classId));
+        if (classFilter) filters.push(classFilter);
       } else {
-        query += ' AND target_class_id IS NULL';
+        filters.push(isNull(announcements.target_class_id));
       }
     } else if (session.role === 'teacher') {
-      query += ' AND (target_role = "all" OR target_role = "teacher")';
+      const teacherRoleFilter = or(eq(announcements.target_role, 'all'), eq(announcements.target_role, 'teacher'));
+      if (teacherRoleFilter) filters.push(teacherRoleFilter);
     }
 
-    query += ' ORDER BY a.created_at DESC';
+    const results = await db.select({
+      ...getTableColumns(announcements),
+      creator_name: users.name,
+      target_class_name: classes.name
+    })
+      .from(announcements)
+      .innerJoin(users, eq(users.id, announcements.created_by))
+      .leftJoin(classes, eq(classes.id, announcements.target_class_id))
+      .where(and(...filters))
+      .orderBy(desc(announcements.created_at));
 
-    const announcements = db.prepare(query).all(...params);
-    return NextResponse.json(announcements);
+    return NextResponse.json(results);
   } catch (error: any) {
     console.error('ANNOUNCEMENTS_GET_ERROR:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -56,12 +59,16 @@ export async function POST(req: NextRequest) {
 
     if (!title || !content) return NextResponse.json({ error: 'Title and content required' }, { status: 400 });
 
-    const db = getDb();
     const id = uuidv4();
-    db.prepare(`
-      INSERT INTO announcements (id, school_id, title, content, target_role, target_class_id, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, sId, title, content, target_role || 'all', target_class_id || null, session.userId);
+    await db.insert(announcements).values({
+      id,
+      school_id: sId || '',
+      title,
+      content,
+      target_role: target_role || 'all',
+      target_class_id: target_class_id || null,
+      created_by: session.userId
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -79,8 +86,7 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
 
-    const db = getDb();
-    db.prepare('DELETE FROM announcements WHERE id = ?').run(id);
+    await db.delete(announcements).where(eq(announcements.id, id));
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { db } from '@/lib/db';
+import { questionBank, teachers, subjects, classes, sessions } from '@/lib/schema';
+import { eq, and, getTableColumns } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 
 export async function GET(
@@ -13,17 +15,24 @@ export async function GET(
     }
 
     const { id } = await params;
-    const db = getDb();
-    const question = db.prepare(`
-      SELECT qb.*, t.name as teacher_name, s.name as subject_name, c.name as class_name, 
-             c.arm as class_arm, sess.name as session_name
-      FROM question_bank qb
-      LEFT JOIN teachers t ON qb.teacher_id = t.id
-      LEFT JOIN subjects s ON qb.subject_id = s.id
-      LEFT JOIN classes c ON qb.class_id = c.id
-      LEFT JOIN sessions sess ON qb.session_id = sess.id
-      WHERE qb.id = ? AND qb.school_id = ?
-    `).get(id, session.schoolId);
+
+    const results = await db.select({
+      ...getTableColumns(questionBank),
+      teacher_name: teachers.name,
+      subject_name: subjects.name,
+      class_name: classes.name,
+      class_arm: classes.arm,
+      session_name: sessions.name
+    })
+      .from(questionBank)
+      .leftJoin(teachers, eq(teachers.id, questionBank.teacher_id))
+      .leftJoin(subjects, eq(subjects.id, questionBank.subject_id))
+      .leftJoin(classes, eq(classes.id, questionBank.class_id))
+      .leftJoin(sessions, eq(sessions.id, questionBank.session_id))
+      .where(and(eq(questionBank.id, id), eq(questionBank.school_id, session.schoolId || '')))
+      .limit(1);
+
+    const question = results[0];
 
     if (!question) {
       return NextResponse.json({ error: 'Question not found' }, { status: 404 });
@@ -64,33 +73,26 @@ export async function PUT(
       return NextResponse.json({ error: 'Question text and correct answer are required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const stmt = db.prepare(`
-      UPDATE question_bank 
-      SET question_text = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?,
-          correct_answer = ?, difficulty = ?, marks = ?, topic = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND school_id = ?
-    `);
+    await db.update(questionBank).set({
+      question_text: questionText,
+      option_a: optionA || null,
+      option_b: optionB || null,
+      option_c: optionC || null,
+      option_d: optionD || null,
+      correct_answer: correctAnswer,
+      difficulty: difficulty || 'medium',
+      marks: marks || 1,
+      topic: topic || null,
+      updated_at: new Date()
+    }).where(and(eq(questionBank.id, id), eq(questionBank.school_id, session.schoolId || '')));
 
-    const result = stmt.run(
-      questionText,
-      optionA || null,
-      optionB || null,
-      optionC || null,
-      optionD || null,
-      correctAnswer,
-      difficulty || 'medium',
-      marks || 1,
-      topic || null,
-      id,
-      session.schoolId
-    );
+    const updatedResult = await db.select().from(questionBank).where(eq(questionBank.id, id)).limit(1);
+    const updatedQuestion = updatedResult[0];
 
-    if (result.changes === 0) {
+    if (!updatedQuestion) {
       return NextResponse.json({ error: 'Question not found' }, { status: 404 });
     }
 
-    const updatedQuestion = db.prepare('SELECT * FROM question_bank WHERE id = ?').get(id);
     return NextResponse.json(updatedQuestion);
   } catch (error) {
     console.error('Error updating question:', error);
@@ -109,13 +111,7 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const db = getDb();
-    const result = db.prepare('DELETE FROM question_bank WHERE id = ? AND school_id = ?')
-      .run(id, session.schoolId);
-
-    if (result.changes === 0) {
-      return NextResponse.json({ error: 'Question not found' }, { status: 404 });
-    }
+    await db.delete(questionBank).where(and(eq(questionBank.id, id), eq(questionBank.school_id, session.schoolId || '')));
 
     return NextResponse.json({ message: 'Question deleted successfully' });
   } catch (error) {
@@ -123,3 +119,4 @@ export async function DELETE(
     return NextResponse.json({ error: 'Failed to delete question' }, { status: 500 });
   }
 }
+

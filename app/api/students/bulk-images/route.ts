@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { students } from '@/lib/schema';
+import { eq, and } from 'drizzle-orm';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,7 +20,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No images provided' }, { status: 400 });
     }
 
-    const db = getDb();
     const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'students');
     await mkdir(uploadDir, { recursive: true });
 
@@ -27,8 +28,6 @@ export async function POST(req: NextRequest) {
       failed: 0,
       errors: [] as string[]
     };
-
-    const updateStmt = db.prepare('UPDATE students SET photo_url = ? WHERE admission_number = ? AND school_id = ?');
 
     for (const file of files) {
       try {
@@ -45,9 +44,13 @@ export async function POST(req: NextRequest) {
         const photoUrl = `/uploads/students/${newFilename}`;
 
         // Update database
-        const info = updateStmt.run(photoUrl, admissionNumber, schoolId);
+        const updateResult = await db.update(students)
+          .set({ photo_url: photoUrl })
+          .where(and(eq(students.admission_number, admissionNumber), eq(students.school_id, schoolId || '')));
 
-        if (info.changes > 0) {
+        // Check if any rows were affected (MySQL specific check might vary, but in Drizzle usually it returns metadata)
+        // For MySQL, rowsAffected is in updateResult[0].affectedRows
+        if ((updateResult[0] as any).affectedRows > 0) {
           results.success++;
         } else {
           results.failed++;
@@ -70,3 +73,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Failed to process bulk images' }, { status: 500 });
   }
 }
+

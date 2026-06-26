@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { attendance } from '@/lib/schema';
+import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -13,14 +15,13 @@ export async function GET(req: NextRequest) {
   const term = searchParams.get('term');
   const schoolId = searchParams.get('schoolId') || session.schoolId;
 
-  const db = getDb();
-  let query = 'SELECT * FROM attendance WHERE school_id = ?';
-  const params: any[] = [schoolId];
-  if (studentId) { query += ' AND student_id = ?'; params.push(studentId); }
-  if (sessionId) { query += ' AND session_id = ?'; params.push(sessionId); }
-  if (term) { query += ' AND term = ?'; params.push(parseInt(term)); }
+  const filters = [eq(attendance.school_id, schoolId || '')];
+  if (studentId) filters.push(eq(attendance.student_id, studentId));
+  if (sessionId) filters.push(eq(attendance.session_id, sessionId));
+  if (term) filters.push(eq(attendance.term, parseInt(term)));
 
-  return NextResponse.json(db.prepare(query).all(...params));
+  const results = await db.select().from(attendance).where(and(...filters));
+  return NextResponse.json(results);
 }
 
 export async function POST(req: NextRequest) {
@@ -31,18 +32,36 @@ export async function POST(req: NextRequest) {
   const { studentId, sessionId, term, times_school_opened, times_present, schoolId } = body;
   const sId = schoolId || session.schoolId;
 
-  const db = getDb();
-  const existing = db.prepare('SELECT id FROM attendance WHERE student_id=? AND session_id=? AND term=?')
-    .get(studentId, sessionId, term) as any;
+  const existingResult = await db.select({ id: attendance.id }).from(attendance).where(
+    and(
+      eq(attendance.student_id, studentId),
+      eq(attendance.session_id, sessionId),
+      eq(attendance.term, term)
+    )
+  ).limit(1);
+  const existing = existingResult[0];
 
   if (existing) {
-    db.prepare('UPDATE attendance SET times_school_opened=?, times_present=? WHERE id=?')
-      .run(times_school_opened ?? 0, times_present ?? 0, existing.id);
-    return NextResponse.json(db.prepare('SELECT * FROM attendance WHERE id=?').get(existing.id));
+    await db.update(attendance).set({
+      times_school_opened: times_school_opened ?? 0,
+      times_present: times_present ?? 0
+    }).where(eq(attendance.id, existing.id));
+
+    const updated = await db.select().from(attendance).where(eq(attendance.id, existing.id)).limit(1);
+    return NextResponse.json(updated[0]);
   } else {
     const id = uuidv4();
-    db.prepare('INSERT INTO attendance (id, school_id, student_id, session_id, term, times_school_opened, times_present) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(id, sId, studentId, sessionId, term, times_school_opened ?? 0, times_present ?? 0);
-    return NextResponse.json(db.prepare('SELECT * FROM attendance WHERE id=?').get(id), { status: 201 });
+    await db.insert(attendance).values({
+      id,
+      school_id: sId || '',
+      student_id: studentId,
+      session_id: sessionId,
+      term,
+      times_school_opened: times_school_opened ?? 0,
+      times_present: times_present ?? 0
+    });
+
+    const created = await db.select().from(attendance).where(eq(attendance.id, id)).limit(1);
+    return NextResponse.json(created[0], { status: 201 });
   }
 }

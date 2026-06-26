@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import getDb from '@/lib/db';
+import { db } from '@/lib/db';
+import { schools, subjects } from '@/lib/schema';
+import { eq, and } from 'drizzle-orm';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -16,10 +18,13 @@ export async function POST(req: NextRequest) {
 
     if (!image) return NextResponse.json({ error: 'No image provided' }, { status: 400 });
 
-    const db = getDb();
-
     // Fetch school AI settings
-    const school = db.prepare('SELECT openai_api_key, gemini_api_key, ai_enabled FROM schools WHERE id = ?').get(sId) as any;
+    const schoolResult = await db.select({
+      openai_api_key: schools.openai_api_key,
+      gemini_api_key: schools.gemini_api_key,
+      ai_enabled: schools.ai_enabled
+    }).from(schools).where(eq(schools.id, sId || '')).limit(1);
+    const school = schoolResult[0];
 
     if (!school) return NextResponse.json({ error: 'School not found' }, { status: 404 });
     if (!school.ai_enabled) return NextResponse.json({ error: 'AI features are currently disabled by the administrator' }, { status: 403 });
@@ -27,7 +32,8 @@ export async function POST(req: NextRequest) {
     const gKey = school.gemini_api_key || process.env.GEMINI_API_KEY;
     const oKey = school.openai_api_key || process.env.OPENAI_API_KEY;
 
-    const subject = db.prepare('SELECT name FROM subjects WHERE id = ?').get(subjectId) as any;
+    const subjectResult = await db.select({ name: subjects.name }).from(subjects).where(eq(subjects.id, subjectId)).limit(1);
+    const subject = subjectResult[0];
     const subjectName = subject?.name || 'Subject';
 
     const base64Parts = image.split(',');
@@ -69,8 +75,8 @@ export async function POST(req: NextRequest) {
       if (!aiText) return NextResponse.json({ error: 'No data extracted from Gemini' }, { status: 422 });
 
       try {
-        const scores = JSON.parse(aiText);
-        return NextResponse.json({ scores });
+        const scoresResult = JSON.parse(aiText);
+        return NextResponse.json({ scores: scoresResult });
       } catch (e) {
         return NextResponse.json({ error: 'Failed to parse Gemini response as JSON' }, { status: 500 });
       }
@@ -116,13 +122,13 @@ export async function POST(req: NextRequest) {
 
       try {
         const parsed = JSON.parse(aiText);
-        const scores = Array.isArray(parsed) ? parsed : (parsed.scores || parsed.students || Object.values(parsed)[0]);
+        const scoresResult = Array.isArray(parsed) ? parsed : (parsed.scores || parsed.students || Object.values(parsed)[0]);
 
-        if (!Array.isArray(scores)) {
+        if (!Array.isArray(scoresResult)) {
             return NextResponse.json({ error: 'AI did not return a list of scores' }, { status: 422 });
         }
 
-        return NextResponse.json({ scores });
+        return NextResponse.json({ scores: scoresResult });
       } catch (e) {
         return NextResponse.json({ error: 'Failed to parse OpenAI response' }, { status: 500 });
       }
@@ -132,3 +138,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+
