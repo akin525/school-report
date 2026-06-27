@@ -10,14 +10,21 @@ export default function StudentsPage() {
   const [user, setUser] = useState<any>(null);
   const [schoolId, setSchoolId] = useState('');
   const [filterClass, setFilterClass] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterStatus, setFilterStatus] = useState('active');
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('last_name');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({
     first_name: '', middle_name: '', last_name: '', class_id: '',
     date_of_birth: '', gender: '', admission_number: '', admission_year: '', photo_url: '',
-    email: '', password: ''
+    email: '', password: '', phone: '', hallmark_reg_no: '', date_of_admission: '',
+    religion: '', home_address: '', previous_school: '', state_of_origin: '',
+    lga: '', bece_no: '', lin_no: '', status: 'active'
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -26,7 +33,7 @@ export default function StudentsPage() {
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [showBulkImageModal, setShowBulkImageModal] = useState(false);
   const [bulkImageFiles, setBulkImageFiles] = useState<File[]>([]);
-  const [bulkImageResults, setBulkImageStatus] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
+  const [bulkImageResults, setBulkImageStatus] = useState<any>(null);
   const [generatingLogins, setGeneratingLogins] = useState(false);
   const [showAIAnalysisModal, setShowAIAnalysisModal] = useState(false);
   const [selectedStudentForAI, setSelectedStudentForAI] = useState<any>(null);
@@ -53,8 +60,8 @@ export default function StudentsPage() {
     setLoading(true);
     try {
       const [studRes, clsRes] = await Promise.all([
-        fetch(`/api/students?schoolId=${sid}`),
-        fetch(`/api/classes?schoolId=${sid}`)
+        fetch('/api/students?schoolId=' + sid + '&status=' + filterStatus),
+        fetch('/api/classes?schoolId=' + sid)
       ]);
       const studData = await studRes.json();
       const clsData = await clsRes.json();
@@ -83,16 +90,37 @@ export default function StudentsPage() {
         admission_year: student.admission_year || '',
         photo_url: student.photo_url || '',
         email: student.email || '',
-        password: ''
+        password: '',
+        phone: student.phone || '',
+        hallmark_reg_no: student.hallmark_reg_no || '',
+        date_of_admission: student.date_of_admission ? new Date(student.date_of_admission).toISOString().split('T')[0] : '',
+        religion: student.religion || '',
+        home_address: student.home_address || '',
+        previous_school: student.previous_school || '',
+        state_of_origin: student.state_of_origin || '',
+        lga: student.lga || '',
+        bece_no: student.bece_no || '',
+        status: student.status || 'active',
+        lin_no: student.lin_no || ''
       });
     } else {
       setEditing(null);
-      setForm({ first_name: '', middle_name: '', last_name: '', class_id: '', date_of_birth: '', gender: '', admission_number: '', admission_year: '', photo_url: '', email: '', password: '' });
+      setForm({ 
+        first_name: '', middle_name: '', last_name: '', class_id: '', date_of_birth: '', gender: '', 
+        admission_number: '', admission_year: '', photo_url: '', email: '', password: '',
+        phone: '', hallmark_reg_no: '', date_of_admission: '', religion: '', home_address: '',
+        previous_school: '', state_of_origin: '', lga: '', bece_no: '', lin_no: '', status: 'active'
+      });
     }
     setShowModal(true);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const viewDetails = (student: any) => {
+    setSelectedStudent(student);
+    setShowDetailsModal(true);
+  };
+
+  const handleFileUpload = async (e: any) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -160,7 +188,7 @@ export default function StudentsPage() {
 
   const downloadTemplate = () => {
     const headers = ['first_name', 'middle_name', 'last_name', 'admission_number', 'admission_year', 'gender', 'date_of_birth', 'class_name'];
-    const csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\nJohn,Doe,Smith,HHC/24/001,2024,male,2015-05-20,JS1 A";
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n";
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -170,12 +198,12 @@ export default function StudentsPage() {
     document.body.removeChild(link);
   };
 
-  const handleBulkCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBulkCsv = (e: any) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = (event: any) => {
       const text = event.target?.result as string;
       const lines = text.split('\n');
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
@@ -187,9 +215,8 @@ export default function StudentsPage() {
           obj[header] = values[index];
         });
         
-        // Map class name to ID
         if (obj.class_name) {
-          const cls = classes.find(c => `${c.name} ${c.arm}`.toLowerCase() === obj.class_name.toLowerCase() || c.name.toLowerCase() === obj.class_name.toLowerCase());
+          const cls = classes.find(c => (c.name + ' ' + c.arm).toLowerCase() === obj.class_name.toLowerCase() || c.name.toLowerCase() === obj.class_name.toLowerCase());
           if (cls) obj.class_id = cls.id;
         }
         return obj;
@@ -223,10 +250,10 @@ export default function StudentsPage() {
     setBulkProcessing(false);
   };
 
-  const handleBulkImages = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBulkImages = (e: any) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    setBulkImageFiles(files);
+    setBulkImageFiles(files as File[]);
     setBulkImageStatus(null);
     setShowBulkImageModal(true);
   };
@@ -260,8 +287,7 @@ export default function StudentsPage() {
   };
 
   const generateMissingLogins = async () => {
-    if (!confirm('This will generate login credentials for all students who don\'t have them yet. \n\nUsername: Admission Number \nDefault Password: password123 \n\nProceed?')) return;
-
+    if (!confirm('Generate missing student logins?')) return;
     setGeneratingLogins(true);
     try {
       const res = await fetch('/api/students/generate-logins', {
@@ -271,7 +297,7 @@ export default function StudentsPage() {
       });
       const result = await res.json();
       if (res.ok) {
-        alert(result.message + (result.count > 0 ? `\n\nDefault Password for all: ${result.defaultPassword}` : ''));
+        alert(result.message);
         loadData(schoolId);
       } else {
         alert('Error: ' + result.error);
@@ -289,15 +315,15 @@ export default function StudentsPage() {
     setAiAnalysisResult('');
     setLoadingAIAnalysis(true);
     try {
-      const res = await fetch(`/api/students/ai-analysis?studentId=${student.id}&provider=${aiProvider}`);
+      const res = await fetch('/api/students/ai-analysis?studentId=' + student.id + '&provider=' + aiProvider);
       const data = await res.json();
       if (res.ok) {
         setAiAnalysisResult(data.analysis);
       } else {
-        setAiAnalysisResult("Failed to perform AI analysis: " + data.error);
+        setAiAnalysisResult("Failed: " + data.error);
       }
     } catch (e) {
-      setAiAnalysisResult("Error connecting to AI service.");
+      setAiAnalysisResult("Error.");
     } finally {
       setLoadingAIAnalysis(false);
     }
@@ -305,8 +331,14 @@ export default function StudentsPage() {
 
   const filtered = students.filter(s => {
     const matchClass = !filterClass || s.class_id === filterClass;
-    const matchSearch = !search || `${s.first_name} ${s.last_name} ${s.admission_number}`.toLowerCase().includes(search.toLowerCase());
-    return matchClass && matchSearch;
+    const matchCategory = !filterCategory || s.class_category === filterCategory;
+    const matchSearch = !search || (s.first_name + ' ' + s.last_name + ' ' + (s.admission_number || '')).toLowerCase().includes(search.toLowerCase());
+    return matchClass && matchCategory && matchSearch;
+  }).sort((a, b) => {
+    if (sortBy === 'admission_number') {
+      return (a.admission_number || '').localeCompare(b.admission_number || '');
+    }
+    return (a.last_name || '').localeCompare(b.last_name || '');
   });
 
   return (
@@ -314,99 +346,90 @@ export default function StudentsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Students</h1>
-          <p className="text-gray-500 text-sm mt-1">{filtered.length} student{filtered.length !== 1 ? 's' : ''} found</p>
+          <p className="text-gray-500 text-sm mt-1">{filtered.length} students found</p>
         </div>
         {user?.role !== 'teacher' && (
           <div className="flex items-center gap-3">
-            <div className="relative group">
-              <button className="btn-secondary flex items-center gap-2">
-                <span>📁</span> Bulk Upload
-              </button>
+             <div className="relative group">
+              <button className="btn-secondary flex items-center gap-2">📁 Bulk</button>
               <div className="absolute right-0 mt-1 w-48 bg-white border rounded-lg shadow-xl hidden group-hover:block z-20">
-                <button onClick={downloadTemplate} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm border-b">Download Template</button>
+                <button onClick={downloadTemplate} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm border-b">Template</button>
                 <label className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm block cursor-pointer border-b">
                   Upload CSV
                   <input type="file" accept=".csv" className="hidden" onChange={handleBulkCsv} />
                 </label>
-                <button onClick={generateMissingLogins} disabled={generatingLogins} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm border-b text-blue-700 font-medium">
-                  {generatingLogins ? 'Generating...' : '🔑 Generate Missing Logins'}
-                </button>
+                <button onClick={generateMissingLogins} disabled={generatingLogins} className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm border-b">Logins</button>
                 <label className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm block cursor-pointer">
-                  Upload Images
+                  Images
                   <input type="file" accept="image/*" multiple className="hidden" onChange={handleBulkImages} />
                 </label>
               </div>
             </div>
-            <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
-              <span>+</span> Add Student
-            </button>
+            <button onClick={() => openModal()} className="btn-primary">+ Add</button>
           </div>
         )}
       </div>
 
-      {/* Filters */}
       <div className="card">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <input type="text" placeholder="Search by name or admission number..." className="input flex-1" value={search} onChange={e => setSearch(e.target.value)} />
-          <select className="input sm:w-48" value={filterClass} onChange={e => setFilterClass(e.target.value)}>
-            <option value="">All Classes</option>
-            {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
-          </select>
+        <div className="flex flex-col lg:flex-row gap-4">
+          <input type="text" placeholder="Search..." className="input flex-1" value={search} onChange={e => setSearch(e.target.value)} />
+          <div className="flex flex-wrap gap-2">
+            <select className="input w-full sm:w-40" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
+              <option value="">All Categories</option>
+              <option value="primary">Primary</option>
+              <option value="secondary">Secondary</option>
+              <option value="nursery">Nursery</option>
+            </select>
+            <select className="input w-full sm:w-48" value={filterClass} onChange={e => setFilterClass(e.target.value)}>
+              <option value="">All Classes</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
+            </select>
+            <select className="input w-full sm:w-40" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); loadData(schoolId); }}>
+              <option value="all">All Status</option>
+              <option value="active">Active Only</option>
+              <option value="graduated">Graduated</option>
+              <option value="left">Left</option>
+              <option value="suspended">Suspended</option>
+            </select>
+            <select className="input w-full sm:w-48" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+              <option value="last_name">Sort by Name</option>
+              <option value="admission_number">Sort by Adm. No.</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Table */}
       <div className="card p-0 overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center items-center h-32">
-            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
-            <div className="text-5xl mb-4">👨‍🎓</div>
-            <p className="text-lg font-medium">No students found</p>
-            <p className="text-sm mt-1">Add a student to get started</p>
-          </div>
-        ) : (
+        {loading ? <p className="p-8 text-center">Loading...</p> : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="table-header text-left">Photo</th>
-                  <th className="table-header text-left">Admission No.</th>
-                  <th className="table-header text-left">Name</th>
-                  <th className="table-header text-left">Class</th>
-                  <th className="table-header text-left">Age</th>
-                  <th className="table-header text-left">Gender</th>
-                  {user?.role !== 'teacher' && <th className="table-header text-left">Actions</th>}
+                <tr className="border-b bg-gray-50">
+                  <th className="p-4 text-left">Photo</th>
+                  <th className="p-4 text-left">Adm No.</th>
+                  <th className="p-4 text-left">Name</th>
+                  <th className="p-4 text-left">Class</th>
+                  <th className="p-4 text-left">Gender</th>
+                  <th className="p-4 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((s, i) => (
-                  <tr key={s.id} className={`border-b border-gray-100 hover:bg-gray-50 ${i % 2 === 0 ? '' : 'bg-gray-50/50'}`}>
-                    <td className="table-cell">
-                      {s.photo_url ? (
-                        <img src={s.photo_url} alt="" className="w-8 h-8 rounded-full object-cover border" />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-[10px]">
-                          No Pic
-                        </div>
-                      )}
+                  <tr key={s.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => viewDetails(s)}>
+                    <td className="p-4">
+                      {s.photo_url ? <img src={s.photo_url} className="w-10 h-10 rounded-full object-cover" /> : '—'}
                     </td>
-                    <td className="table-cell font-mono text-xs text-blue-700">{s.admission_number || '—'}</td>
-                    <td className="table-cell font-medium">{s.last_name}, {s.first_name} {s.middle_name}</td>
-                    <td className="table-cell"><span className="badge-primary">{s.class_name || '—'}</span></td>
-                    <td className="table-cell">{getAge(s.date_of_birth) || '—'}</td>
-                    <td className="table-cell capitalize">{s.gender || '—'}</td>
-                    {user?.role !== 'teacher' && (
-                      <td className="table-cell">
-                        <div className="flex gap-2">
-                          <button onClick={() => openModal(s)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
-                          <button onClick={() => runAIAnalysis(s)} className="text-purple-600 hover:text-purple-800 text-xs font-medium">✨ AI Insight</button>
-                          <button onClick={() => deleteStudent(s.id)} className="text-red-600 hover:text-red-800 text-xs font-medium">Delete</button>
-                        </div>
-                      </td>
-                    )}
+                    <td className="p-4 font-mono">{s.admission_number || '—'}</td>
+                    <td className="p-4 font-medium">{s.last_name}, {s.first_name}</td>
+                    <td className="p-4">{s.class_name} ({s.class_category})</td>
+                    <td className="p-4 capitalize">{s.gender}</td>
+                    <td className="p-4" onClick={e => e.stopPropagation()}>
+                      <div className="flex gap-2">
+                        <button onClick={() => openModal(s)} className="text-blue-600">Edit</button>
+                        <button onClick={() => runAIAnalysis(s)} className="text-purple-600">Insight</button>
+                        <button onClick={() => deleteStudent(s.id)} className="text-red-600">Delete</button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -415,281 +438,101 @@ export default function StudentsPage() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div className="bg-blue-700 text-white px-6 py-4 flex items-center justify-between">
-              <h3 className="font-bold text-lg">{editing ? 'Edit Student' : 'Add New Student'}</h3>
-              <button onClick={() => setShowModal(false)} className="text-white hover:text-blue-200 text-2xl leading-none">×</button>
-            </div>
-            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="label">First Name *</label>
-                  <input className="input" value={form.first_name} onChange={e => setForm({...form, first_name: e.target.value})} />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+             <div className="p-6 border-b flex justify-between items-center">
+                <h3 className="text-xl font-bold">{editing ? 'Edit' : 'Add'} Student</h3>
+                <button onClick={() => setShowModal(false)} className="text-2xl">&times;</button>
+             </div>
+             <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                   <input className="input" placeholder="Surname" value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value})} />
+                   <input className="input" placeholder="First Name" value={form.first_name} onChange={e => setForm({...form, first_name: e.target.value})} />
+                   <input className="input" placeholder="Middle Name" value={form.middle_name} onChange={e => setForm({...form, middle_name: e.target.value})} />
+                   <select className="input" value={form.gender} onChange={e => setForm({...form, gender: e.target.value})}>
+                      <option value="">Gender</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                   </select>
+                   <input type="date" className="input" value={form.date_of_birth} onChange={e => setForm({...form, date_of_birth: e.target.value})} />
+                   <input className="input" placeholder="Religion" value={form.religion} onChange={e => setForm({...form, religion: e.target.value})} />
+                   <input className="input" placeholder="Phone" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
+                   <input className="input" placeholder="Adm No" value={form.admission_number} onChange={e => setForm({...form, admission_number: e.target.value})} />
+                   <input className="input" placeholder="Hallmark Reg No" value={form.hallmark_reg_no} onChange={e => setForm({...form, hallmark_reg_no: e.target.value})} />
+                   <input type="date" className="input" placeholder="Adm Date" value={form.date_of_admission} onChange={e => setForm({...form, date_of_admission: e.target.value})} />
+                   <select className="input" value={form.class_id} onChange={e => setForm({...form, class_id: e.target.value})}>
+                      <option value="">Class</option>
+                      {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
+                   </select>
+                   <input className="input" placeholder="BECE No" value={form.bece_no} onChange={e => setForm({...form, bece_no: e.target.value})} />
+                   <input className="input" placeholder="LIN No" value={form.lin_no} onChange={e => setForm({...form, lin_no: e.target.value})} />
+                   <input className="input" placeholder="State" value={form.state_of_origin} onChange={e => setForm({...form, state_of_origin: e.target.value})} />
+                   <input className="input" placeholder="LGA" value={form.lga} onChange={e => setForm({...form, lga: e.target.value})} />
+                   <select className="input" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
+                      <option value="active">Active</option>
+                      <option value="graduated">Graduated</option>
+                      <option value="left">Left</option>
+                      <option value="suspended">Suspended</option>
+                   </select>
+                   <textarea className="input col-span-2" placeholder="Address" value={form.home_address} onChange={e => setForm({...form, home_address: e.target.value})} />
+                   <input className="input col-span-2" placeholder="Previous School" value={form.previous_school} onChange={e => setForm({...form, previous_school: e.target.value})} />
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="label">Middle Name</label>
-                  <input className="input" value={form.middle_name} onChange={e => setForm({...form, middle_name: e.target.value})} />
+                <div className="flex justify-end gap-3">
+                   <button onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
+                   <button onClick={saveStudent} className="btn-primary">Save</button>
                 </div>
-                <div className="col-span-2">
-                  <label className="label">Last Name (Surname) *</label>
-                  <input className="input" value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value})} />
-                </div>
-                <div>
-                  <label className="label">Admission Number</label>
-                  <input className="input" placeholder="e.g. HHC/24/00001" value={form.admission_number} onChange={e => setForm({...form, admission_number: e.target.value})} />
-                </div>
-                <div>
-                  <label className="label">Admission Year</label>
-                  <input className="input" placeholder="e.g. 2024" value={form.admission_year} onChange={e => setForm({...form, admission_year: e.target.value})} />
-                </div>
-                <div>
-                  <label className="label">Class</label>
-                  <select className="input" value={form.class_id} onChange={e => setForm({...form, class_id: e.target.value})}>
-                    <option value="">Select class</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Gender</label>
-                  <select className="input" value={form.gender} onChange={e => setForm({...form, gender: e.target.value})}>
-                    <option value="">Select</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Date of Birth</label>
-                  <input type="date" className="input" value={form.date_of_birth} onChange={e => setForm({...form, date_of_birth: e.target.value})} />
-                </div>
-                <div className="col-span-2 border-t pt-4 mt-2">
-                  <h4 className="font-bold text-sm text-blue-800 mb-3">Login Credentials</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="label">Email / Username</label>
-                      <input className="input" placeholder="student@school.com" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="label">Password {editing && '(leave blank to keep)'}</label>
-                      <input type="password" title="Set a password for the student to login" className="input" placeholder="••••••••" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-gray-500 mt-2 italic">Students can use these credentials to access their results and lesson notes.</p>
-                </div>
-                <div className="col-span-2">
-                  <label className="label">Student Picture</label>
-                  <div className="flex flex-col gap-2">
-                    {form.photo_url && (
-                      <div className="relative w-20 h-20 rounded-lg overflow-hidden border">
-                        <img src={form.photo_url} alt="Preview" className="w-full h-full object-cover" />
-                        <button
-                          onClick={() => setForm({...form, photo_url: ''})}
-                          className="absolute top-0 right-0 bg-red-500 text-white p-1 text-[10px] hover:bg-red-600"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    )}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                      onChange={handleFileUpload}
-                      disabled={uploading}
-                    />
-                    {uploading && <span className="text-[10px] text-blue-600 animate-pulse">Uploading...</span>}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t">
-              <button onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
-              <button onClick={saveStudent} disabled={saving || !form.first_name || !form.last_name} className="btn-primary">
-                {saving ? 'Saving...' : editing ? 'Update Student' : 'Add Student'}
-              </button>
-            </div>
+             </div>
           </div>
         </div>
       )}
 
-      {/* Bulk Preview Modal */}
-      {showBulkModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="bg-blue-800 text-white px-6 py-4 flex items-center justify-between">
-              <h3 className="font-bold text-lg">Preview Bulk Upload ({bulkData.length} students)</h3>
-              <button onClick={() => setShowBulkModal(false)} className="text-2xl leading-none">×</button>
-            </div>
-            <div className="p-6 overflow-auto flex-1">
-              <p className="text-sm text-gray-500 mb-4 italic">* If a class name doesn't match exactly, the class will be left empty.</p>
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="p-2 border text-left">First Name</th>
-                    <th className="p-2 border text-left">Last Name</th>
-                    <th className="p-2 border text-left">Adm No.</th>
-                    <th className="p-2 border text-left">Class (Detected)</th>
-                    <th className="p-2 border text-left">Gender</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bulkData.map((s, idx) => (
-                    <tr key={idx}>
-                      <td className="p-2 border">{s.first_name}</td>
-                      <td className="p-2 border">{s.last_name}</td>
-                      <td className="p-2 border">{s.admission_number}</td>
-                      <td className="p-2 border">
-                        {s.class_id ? (
-                          <span className="text-green-600 font-medium">{s.class_name}</span>
-                        ) : (
-                          <span className="text-red-500 font-medium">{s.class_name || '—'} (No match)</span>
-                        )}
-                      </td>
-                      <td className="p-2 border">{s.gender}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t">
-              <button onClick={() => setShowBulkModal(false)} className="btn-secondary" disabled={bulkProcessing}>Cancel</button>
-              <button onClick={processBulkUpload} disabled={bulkProcessing} className="btn-primary flex items-center gap-2">
-                {bulkProcessing ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Processing...
-                  </>
-                ) : 'Confirm and Upload All'}
-              </button>
-            </div>
+      {/* Details View */}
+      {showDetailsModal && selectedStudent && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl">
+             <div className="bg-blue-800 p-6 text-white flex justify-between items-center">
+                <h2 className="text-xl font-bold">Student Details</h2>
+                <button onClick={() => setShowDetailsModal(false)} className="text-3xl">&times;</button>
+             </div>
+             <div className="p-8 grid grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto">
+                <DetailRow label="Name" value={selectedStudent.last_name + ", " + selectedStudent.first_name} />
+                <DetailRow label="Adm No" value={selectedStudent.admission_number} />
+                <DetailRow label="Class" value={selectedStudent.class_name} />
+                <DetailRow label="Category" value={selectedStudent.class_category} />
+                <DetailRow label="Gender" value={selectedStudent.gender} />
+                <DetailRow label="DOB" value={selectedStudent.date_of_birth} />
+                <DetailRow label="Religion" value={selectedStudent.religion} />
+                <DetailRow label="Phone" value={selectedStudent.phone} />
+                <DetailRow label="Reg No" value={selectedStudent.hallmark_reg_no} />
+                <DetailRow label="Adm Date" value={selectedStudent.date_of_admission} />
+                <DetailRow label="State" value={selectedStudent.state_of_origin} />
+                <DetailRow label="LGA" value={selectedStudent.lga} />
+                <DetailRow label="BECE" value={selectedStudent.bece_no} />
+                <DetailRow label="LIN" value={selectedStudent.lin_no} />
+                <DetailRow label="Prev School" value={selectedStudent.previous_school} />
+                <DetailRow label="Status" value={selectedStudent.status} />
+                <div className="col-span-2">
+                   <p className="text-xs text-gray-400 uppercase font-bold mb-1">Home Address</p>
+                   <p className="p-3 bg-gray-50 rounded">{selectedStudent.home_address || '—'}</p>
+                </div>
+             </div>
+             <div className="p-6 border-t flex justify-end">
+                <button onClick={() => setShowDetailsModal(false)} className="btn-primary px-8">Close</button>
+             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Bulk Images Modal */}
-      {showBulkImageModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="bg-blue-800 text-white px-6 py-4 flex items-center justify-between">
-              <h3 className="font-bold text-lg">Bulk Image Upload ({bulkImageFiles.length} images)</h3>
-              <button onClick={() => setShowBulkImageModal(false)} className="text-2xl leading-none">×</button>
-            </div>
-            <div className="p-6 overflow-auto flex-1">
-              {!bulkImageResults ? (
-                <div className="space-y-4">
-                  <p className="text-sm text-gray-600">
-                    Images will be matched to students based on their <strong>Admission Number</strong>. 
-                    Ensure the filename (without extension) matches exactly. 
-                    <br/><br/>
-                    Example: <code className="bg-gray-100 px-1 rounded">HHC-24-001.jpg</code> matches student with admission number <code className="bg-gray-100 px-1 rounded">HHC-24-001</code>.
-                  </p>
-                  <div className="border rounded-lg p-4 bg-gray-50">
-                    <h4 className="font-bold text-sm mb-2">Selected Files:</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {bulkImageFiles.map((f, i) => (
-                        <span key={i} className="text-[10px] bg-white border px-2 py-1 rounded">{f.name}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-center">
-                      <div className="text-2xl font-bold text-green-700">{bulkImageResults.success}</div>
-                      <div className="text-xs text-green-600 uppercase font-bold">Successfully Matched</div>
-                    </div>
-                    <div className="bg-red-50 border border-red-200 p-4 rounded-lg text-center">
-                      <div className="text-2xl font-bold text-red-700">{bulkImageResults.failed}</div>
-                      <div className="text-xs text-red-600 uppercase font-bold">Failed/No Match</div>
-                    </div>
-                  </div>
-                  {bulkImageResults.errors.length > 0 && (
-                    <div className="border rounded-lg overflow-hidden">
-                      <div className="bg-gray-100 px-4 py-2 text-xs font-bold border-b">Error Details</div>
-                      <div className="max-h-48 overflow-y-auto p-4 space-y-1">
-                        {bulkImageResults.errors.map((err, i) => (
-                          <div key={i} className="text-[10px] text-red-600">• {err}</div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t">
-              {!bulkImageResults ? (
-                <>
-                  <button onClick={() => setShowBulkImageModal(false)} className="btn-secondary" disabled={bulkProcessing}>Cancel</button>
-                  <button onClick={processBulkImages} disabled={bulkProcessing} className="btn-primary flex items-center gap-2">
-                    {bulkProcessing ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Processing...
-                      </>
-                    ) : 'Match and Upload Images'}
-                  </button>
-                </>
-              ) : (
-                <button onClick={() => setShowBulkImageModal(false)} className="btn-primary">Close</button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      {/* AI Analysis Modal */}
-      {showAIAnalysisModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="bg-gradient-to-r from-purple-800 to-indigo-900 p-6 text-white flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <span>✨</span> Academic Performance Insight
-                </h2>
-                <p className="text-purple-200 text-sm">
-                  {selectedStudentForAI?.first_name} {selectedStudentForAI?.last_name}
-                </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <select
-                  className="bg-purple-900/50 border border-purple-400/30 rounded-lg text-xs p-1 text-white outline-none"
-                  value={aiProvider}
-                  onChange={(e: any) => setAIProvider(e.target.value)}
-                >
-                  <option value="openai">ChatGPT</option>
-                  <option value="gemini">Gemini</option>
-                </select>
-                <button onClick={() => setShowAIAnalysisModal(false)} className="text-white hover:text-purple-200 text-2xl font-bold">&times;</button>
-              </div>
-            </div>
-            <div className="p-8 max-h-[70vh] overflow-y-auto">
-              {loadingAIAnalysis ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                  <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-gray-600 font-medium animate-pulse">AI is analyzing academic records...</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div
-                    className="prose prose-purple max-w-none text-gray-700 leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: aiAnalysisResult }}
-                  />
-                  <div className="pt-6 border-t flex justify-end">
-                    <button
-                      onClick={() => setShowAIAnalysisModal(false)}
-                      className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-all"
-                    >
-                      Close Analysis
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+function DetailRow({ label, value }: any) {
+  return (
+    <div className="py-2 border-b border-gray-50">
+      <p className="text-xs text-gray-400 uppercase font-bold">{label}</p>
+      <p className="font-medium">{value || '—'}</p>
     </div>
   );
 }

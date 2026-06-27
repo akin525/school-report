@@ -91,15 +91,26 @@ export const students = mysqlTable('students', {
   school_id: varchar('school_id', { length: 36 }).notNull(),
   user_id: varchar('user_id', { length: 36 }),
   email: varchar('email', { length: 255 }),
+  phone: varchar('phone', { length: 50 }),
   admission_number: varchar('admission_number', { length: 100 }).unique(),
+  hallmark_reg_no: varchar('hallmark_reg_no', { length: 100 }),
+  date_of_admission: datetime('date_of_admission'),
   first_name: varchar('first_name', { length: 100 }).notNull(),
   middle_name: varchar('middle_name', { length: 100 }),
   last_name: varchar('last_name', { length: 100 }).notNull(),
   class_id: varchar('class_id', { length: 36 }),
   date_of_birth: varchar('date_of_birth', { length: 50 }),
   gender: varchar('gender', { length: 20 }),
+  religion: varchar('religion', { length: 50 }),
+  home_address: text('home_address'),
+  previous_school: text('previous_school'),
+  state_of_origin: varchar('state_of_origin', { length: 100 }),
+  lga: varchar('lga', { length: 100 }),
+  bece_no: varchar('bece_no', { length: 100 }),
+  lin_no: varchar('lin_no', { length: 100 }),
   photo_url: text('photo_url'),
   admission_year: varchar('admission_year', { length: 10 }),
+  status: mysqlEnum('status', ['active', 'graduated', 'left', 'suspended']).default('active'),
   created_at: datetime('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -144,10 +155,6 @@ export const attendance = mysqlTable('attendance', {
   term: int('term').notNull(),
   times_school_opened: int('times_school_opened').default(0),
   times_present: int('times_present').default(0),
-}, (table) => {
-  return {
-    attendanceUniqueIdx: uniqueIndex('attendance_unique_idx').on(table.student_id, table.session_id, table.term),
-  };
 });
 
 export const teacherAssignments = mysqlTable('teacher_assignments', {
@@ -158,10 +165,6 @@ export const teacherAssignments = mysqlTable('teacher_assignments', {
   class_id: varchar('class_id', { length: 36 }).notNull(),
   session_id: varchar('session_id', { length: 36 }).notNull(),
   created_at: datetime('created_at').default(sql`CURRENT_TIMESTAMP`),
-}, (table) => {
-  return {
-    teacherAssignmentsUniqueIdx: uniqueIndex('teacher_assignments_unique_idx').on(table.teacher_id, table.subject_id, table.class_id, table.session_id),
-  };
 });
 
 export const announcements = mysqlTable('announcements', {
@@ -242,10 +245,6 @@ export const examSubmissions = mysqlTable('exam_submissions', {
   score: double('score'),
   submitted_at: datetime('submitted_at').default(sql`CURRENT_TIMESTAMP`),
   answers: json('answers'),
-}, (table) => {
-  return {
-    examSubmissionsUniqueIdx: uniqueIndex('exam_submissions_unique_idx').on(table.exam_id, table.student_id),
-  };
 });
 
 export const classSubjects = mysqlTable('class_subjects', {
@@ -253,10 +252,6 @@ export const classSubjects = mysqlTable('class_subjects', {
   class_id: varchar('class_id', { length: 36 }).notNull(),
   subject_id: varchar('subject_id', { length: 36 }).notNull(),
   school_id: varchar('school_id', { length: 36 }).notNull(),
-}, (table) => {
-  return {
-    classSubjectsUniqueIdx: uniqueIndex('class_subjects_unique_idx').on(table.class_id, table.subject_id),
-  };
 });
 
 export const teacherComments = mysqlTable('teacher_comments', {
@@ -272,10 +267,6 @@ export const teacherComments = mysqlTable('teacher_comments', {
   coordinator_signature: text('coordinator_signature'),
   coordinator_date: varchar('coordinator_date', { length: 50 }),
   next_term_starts: varchar('next_term_starts', { length: 50 }),
-}, (table) => {
-  return {
-    teacherCommentsUniqueIdx: uniqueIndex('teacher_comments_unique_idx').on(table.student_id, table.session_id, table.term),
-  };
 });
 
 export const affectiveTraits = mysqlTable('affective_traits', {
@@ -291,10 +282,6 @@ export const affectiveTraits = mysqlTable('affective_traits', {
   politeness: text('politeness'),
   conduct: text('conduct'),
   created_at: datetime('created_at').default(sql`CURRENT_TIMESTAMP`),
-}, (table) => {
-  return {
-    affectiveTraitsUniqueIdx: uniqueIndex('affective_traits_unique_idx').on(table.student_id, table.session_id, table.term),
-  };
 });
 
 export const physicalDev = mysqlTable('physical_dev', {
@@ -307,10 +294,6 @@ export const physicalDev = mysqlTable('physical_dev', {
   weight_to: double('weight_to'),
   height_from: double('height_from'),
   height_to: double('height_to'),
-}, (table) => {
-  return {
-    physicalDevUniqueIdx: uniqueIndex('physical_dev_unique_idx').on(table.student_id, table.session_id, table.term),
-  };
 });
 
 export const timetable = mysqlTable('timetable', {

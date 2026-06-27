@@ -8,7 +8,7 @@ export default function SessionsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState({ name: '', start_year: new Date().getFullYear().toString(), end_year: (new Date().getFullYear() + 1).toString(), is_current: false });
+  const [form, setForm] = useState({ name: '', start_year: new Date().getFullYear().toString(), end_year: (new Date().getFullYear() + 1).toString(), is_current: false, promote_students: false });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -28,20 +28,36 @@ export default function SessionsPage() {
 
   const openModal = (s?: any) => {
     if (s) { setEditing(s); setForm({ name: s.name, start_year: s.start_year.toString(), end_year: s.end_year.toString(), is_current: !!s.is_current }); }
-    else { setEditing(null); setForm({ name: '', start_year: new Date().getFullYear().toString(), end_year: (new Date().getFullYear() + 1).toString(), is_current: false }); }
+    else { setEditing(null); setForm({ name: '', start_year: new Date().getFullYear().toString(), end_year: (new Date().getFullYear() + 1).toString(), is_current: false, promote_students: false }); }
     setShowModal(true);
   };
 
   const saveSession = async () => {
     setSaving(true);
-    const method = editing ? 'PUT' : 'POST';
-    const body = editing
-      ? { id: editing.id, ...form, start_year: parseInt(form.start_year), end_year: parseInt(form.end_year) }
-      : { ...form, start_year: parseInt(form.start_year), end_year: parseInt(form.end_year), schoolId };
-    await fetch('/api/sessions', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    setShowModal(false);
-    loadData(schoolId);
-    setSaving(false);
+    try {
+      const method = editing ? 'PUT' : 'POST';
+      const body = editing
+        ? { id: editing.id, ...form, start_year: parseInt(form.start_year), end_year: parseInt(form.end_year) }
+        : { ...form, start_year: parseInt(form.start_year), end_year: parseInt(form.end_year), schoolId };
+      
+      const res = await fetch('/api/sessions', { 
+        method, 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(body) 
+      });
+
+      if (res.ok) {
+        setShowModal(false);
+        loadData(schoolId);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to save session');
+      }
+    } catch (e) {
+      alert('Network error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -94,6 +110,25 @@ export default function SessionsPage() {
                 <input type="checkbox" checked={form.is_current} onChange={e => setForm({...form, is_current: e.target.checked})} className="rounded" />
                 <span className="text-sm font-medium text-gray-700">Set as Current Session</span>
               </label>
+
+              {!editing && (
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      // @ts-ignore
+                      checked={form.promote_students} 
+                      // @ts-ignore
+                      onChange={e => setForm({...form, promote_students: e.target.checked})} 
+                      className="mt-1 rounded" 
+                    />
+                    <div>
+                      <span className="text-sm font-bold text-blue-800 block">Promote Students</span>
+                      <span className="text-xs text-blue-600">Automatically move active students to the next class (e.g. JS 1 to JS 2).</span>
+                    </div>
+                  </label>
+                </div>
+              )}
             </div>
             <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t">
               <button onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
