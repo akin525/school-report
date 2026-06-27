@@ -27,7 +27,7 @@ export default function SessionsPage() {
   };
 
   const openModal = (s?: any) => {
-    if (s) { setEditing(s); setForm({ name: s.name, start_year: s.start_year.toString(), end_year: s.end_year.toString(), is_current: !!s.is_current }); }
+    if (s) { setEditing(s); setForm({ name: s.name, start_year: s.start_year.toString(), end_year: s.end_year.toString(), is_current: !!s.is_current, promote_students: false }); }
     else { setEditing(null); setForm({ name: '', start_year: new Date().getFullYear().toString(), end_year: (new Date().getFullYear() + 1).toString(), is_current: false, promote_students: false }); }
     setShowModal(true);
   };
@@ -116,10 +116,8 @@ export default function SessionsPage() {
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input 
                       type="checkbox" 
-                      // @ts-ignore
-                      checked={form.promote_students} 
-                      // @ts-ignore
-                      onChange={e => setForm({...form, promote_students: e.target.checked})} 
+                      checked={form.promote_students}
+                      onChange={e => setForm({...form, promote_students: e.target.checked})}
                       className="mt-1 rounded" 
                     />
                     <div>
