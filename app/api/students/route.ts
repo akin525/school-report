@@ -87,7 +87,9 @@ export async function POST(req: NextRequest) {
     } = body;
     const sId = schoolId || session.schoolId;
 
-    if (!first_name || !last_name) return NextResponse.json({ error: 'First name and last name required' }, { status: 400 });
+    if (!first_name || !last_name || !class_id || !gender) {
+      return NextResponse.json({ error: 'First name, last name, class and gender are required' }, { status: 400 });
+    }
 
     const id = uuidv4();
     let userId = null;
@@ -112,20 +114,20 @@ export async function POST(req: NextRequest) {
       hallmark_reg_no: hallmark_reg_no || null,
       date_of_admission: date_of_admission ? new Date(date_of_admission) : null,
       first_name,
-      middle_name: middle_name || '',
+      middle_name: middle_name || null,
       last_name,
       class_id: class_id || null,
-      date_of_birth: date_of_birth || '',
-      gender: gender || '',
-      religion: religion || '',
-      home_address: home_address || '',
-      previous_school: previous_school || '',
-      state_of_origin: state_of_origin || '',
-      lga: lga || '',
-      bece_no: bece_no || '',
-      lin_no: lin_no || '',
-      photo_url: photo_url || '',
-      admission_year: admission_year || '',
+      date_of_birth: date_of_birth || null,
+      gender: gender || null,
+      religion: religion || null,
+      home_address: home_address || null,
+      previous_school: previous_school || null,
+      state_of_origin: state_of_origin || null,
+      lga: lga || null,
+      bece_no: bece_no || null,
+      lin_no: lin_no || null,
+      photo_url: photo_url || null,
+      admission_year: admission_year || null,
       status: status || 'active',
       email: email || null,
       phone: phone || null,
@@ -153,6 +155,10 @@ export async function PUT(req: NextRequest) {
       photo_url, email, password, phone, religion, home_address, 
       previous_school, state_of_origin, lga, bece_no, lin_no
     } = body;
+
+    if (!first_name || !last_name || !class_id || !gender) {
+      return NextResponse.json({ error: 'First name, last name, class and gender are required' }, { status: 400 });
+    }
 
     const studentResult = await db.select().from(students).where(eq(students.id, id)).limit(1);
     const student = studentResult[0];
@@ -185,24 +191,24 @@ export async function PUT(req: NextRequest) {
 
     await db.update(students).set({
       first_name,
-      middle_name,
+      middle_name: middle_name || null,
       last_name,
-      class_id,
-      date_of_birth,
-      gender,
-      admission_number,
-      hallmark_reg_no,
+      class_id: class_id || null,
+      date_of_birth: date_of_birth || null,
+      gender: gender || null,
+      admission_number: admission_number || null,
+      hallmark_reg_no: hallmark_reg_no || null,
       date_of_admission: date_of_admission ? new Date(date_of_admission) : null,
-      religion,
-      home_address,
-      previous_school,
-      state_of_origin,
-      lga,
-      bece_no,
-      lin_no,
-      admission_year,
-      status,
-      photo_url,
+      religion: religion || null,
+      home_address: home_address || null,
+      previous_school: previous_school || null,
+      state_of_origin: state_of_origin || null,
+      lga: lga || null,
+      bece_no: bece_no || null,
+      lin_no: lin_no || null,
+      admission_year: admission_year || null,
+      status: status || 'active',
+      photo_url: photo_url || null,
       email: email || null,
       phone: phone || null,
       user_id: userId

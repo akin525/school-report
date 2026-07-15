@@ -152,6 +152,10 @@ export default function StudentsPage() {
   };
 
   const saveStudent = async () => {
+    if (!form.first_name || !form.last_name || !form.class_id || !form.gender) {
+      alert('First name, Surname, Class and Gender are required');
+      return;
+    }
     setSaving(true);
     try {
       const method = editing ? 'PUT' : 'POST';
@@ -448,36 +452,90 @@ export default function StudentsPage() {
              </div>
              <div className="p-6 space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                   <input className="input" placeholder="Surname" value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value})} />
-                   <input className="input" placeholder="First Name" value={form.first_name} onChange={e => setForm({...form, first_name: e.target.value})} />
-                   <input className="input" placeholder="Middle Name" value={form.middle_name} onChange={e => setForm({...form, middle_name: e.target.value})} />
-                   <select className="input" value={form.gender} onChange={e => setForm({...form, gender: e.target.value})}>
-                      <option value="">Gender</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                   </select>
-                   <input type="date" className="input" value={form.date_of_birth} onChange={e => setForm({...form, date_of_birth: e.target.value})} />
-                   <input className="input" placeholder="Religion" value={form.religion} onChange={e => setForm({...form, religion: e.target.value})} />
-                   <input className="input" placeholder="Phone" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
-                   <input className="input" placeholder="Adm No" value={form.admission_number} onChange={e => setForm({...form, admission_number: e.target.value})} />
-                   <input className="input" placeholder="Hallmark Reg No" value={form.hallmark_reg_no} onChange={e => setForm({...form, hallmark_reg_no: e.target.value})} />
-                   <input type="date" className="input" placeholder="Adm Date" value={form.date_of_admission} onChange={e => setForm({...form, date_of_admission: e.target.value})} />
-                   <select className="input" value={form.class_id} onChange={e => setForm({...form, class_id: e.target.value})}>
-                      <option value="">Class</option>
-                      {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
-                   </select>
-                   <input className="input" placeholder="BECE No" value={form.bece_no} onChange={e => setForm({...form, bece_no: e.target.value})} />
-                   <input className="input" placeholder="LIN No" value={form.lin_no} onChange={e => setForm({...form, lin_no: e.target.value})} />
-                   <input className="input" placeholder="State" value={form.state_of_origin} onChange={e => setForm({...form, state_of_origin: e.target.value})} />
-                   <input className="input" placeholder="LGA" value={form.lga} onChange={e => setForm({...form, lga: e.target.value})} />
-                   <select className="input" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
-                      <option value="active">Active</option>
-                      <option value="graduated">Graduated</option>
-                      <option value="left">Left</option>
-                      <option value="suspended">Suspended</option>
-                   </select>
-                   <textarea className="input col-span-2" placeholder="Address" value={form.home_address} onChange={e => setForm({...form, home_address: e.target.value})} />
-                   <input className="input col-span-2" placeholder="Previous School" value={form.previous_school} onChange={e => setForm({...form, previous_school: e.target.value})} />
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Surname *</label>
+                      <input className="input w-full" placeholder="Surname" value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">First Name *</label>
+                      <input className="input w-full" placeholder="First Name" value={form.first_name} onChange={e => setForm({...form, first_name: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Middle Name</label>
+                      <input className="input w-full" placeholder="Middle Name" value={form.middle_name} onChange={e => setForm({...form, middle_name: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Gender *</label>
+                      <select className="input w-full" value={form.gender} onChange={e => setForm({...form, gender: e.target.value})}>
+                         <option value="">Select Gender</option>
+                         <option value="male">Male</option>
+                         <option value="female">Female</option>
+                      </select>
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Date of Birth</label>
+                      <input type="date" className="input w-full" value={form.date_of_birth} onChange={e => setForm({...form, date_of_birth: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Religion</label>
+                      <input className="input w-full" placeholder="Religion" value={form.religion} onChange={e => setForm({...form, religion: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Phone</label>
+                      <input className="input w-full" placeholder="Phone" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Adm No</label>
+                      <input className="input w-full" placeholder="Adm No" value={form.admission_number} onChange={e => setForm({...form, admission_number: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Hallmark Reg No</label>
+                      <input className="input w-full" placeholder="Hallmark Reg No" value={form.hallmark_reg_no} onChange={e => setForm({...form, hallmark_reg_no: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Adm Date</label>
+                      <input type="date" className="input w-full" placeholder="Adm Date" value={form.date_of_admission} onChange={e => setForm({...form, date_of_admission: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Class *</label>
+                      <select className="input w-full" value={form.class_id} onChange={e => setForm({...form, class_id: e.target.value})}>
+                         <option value="">Select Class</option>
+                         {classes.map(c => <option key={c.id} value={c.id}>{c.name} {c.arm}</option>)}
+                      </select>
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">BECE No</label>
+                      <input className="input w-full" placeholder="BECE No" value={form.bece_no} onChange={e => setForm({...form, bece_no: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">LIN No</label>
+                      <input className="input w-full" placeholder="LIN No" value={form.lin_no} onChange={e => setForm({...form, lin_no: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">State</label>
+                      <input className="input w-full" placeholder="State" value={form.state_of_origin} onChange={e => setForm({...form, state_of_origin: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">LGA</label>
+                      <input className="input w-full" placeholder="LGA" value={form.lga} onChange={e => setForm({...form, lga: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase">Status</label>
+                      <select className="input w-full" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
+                         <option value="active">Active</option>
+                         <option value="graduated">Graduated</option>
+                         <option value="left">Left</option>
+                         <option value="suspended">Suspended</option>
+                      </select>
+                   </div>
+                   <div className="col-span-2">
+                      <label className="text-xs font-bold text-gray-500 uppercase">Address</label>
+                      <textarea className="input w-full" placeholder="Address" value={form.home_address} onChange={e => setForm({...form, home_address: e.target.value})} />
+                   </div>
+                   <div className="col-span-2">
+                      <label className="text-xs font-bold text-gray-500 uppercase">Previous School</label>
+                      <input className="input w-full" placeholder="Previous School" value={form.previous_school} onChange={e => setForm({...form, previous_school: e.target.value})} />
+                   </div>
                 </div>
                 <div className="flex justify-end gap-3">
                    <button onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>

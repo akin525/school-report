@@ -17,24 +17,24 @@ export async function POST(req: NextRequest) {
     }
 
     await db.transaction(async (tx) => {
-      // Chunk the inserts to avoid large transaction overhead if needed,
-      // but for standard bulk uploads, one batch is usually fine.
-      const values = data.map((student: any) => ({
+      const values = data.filter((s: any) => s.first_name && s.last_name).map((student: any) => ({
         id: uuidv4(),
         school_id: sId || '',
         admission_number: student.admission_number || null,
-        first_name: student.first_name || '',
-        middle_name: student.middle_name || '',
-        last_name: student.last_name || '',
+        first_name: student.first_name,
+        middle_name: student.middle_name || null,
+        last_name: student.last_name,
         class_id: student.class_id || null,
-        date_of_birth: student.date_of_birth || '',
-        gender: student.gender || '',
-        admission_year: student.admission_year || '',
-        email: student.email || null
+        date_of_birth: student.date_of_birth || null,
+        gender: student.gender || null,
+        admission_year: student.admission_year || null,
+        email: student.email || null,
+        status: 'active'
       }));
 
-      // MySQL might have limits on number of rows in one INSERT, but standard uploads are small.
-      await tx.insert(studentsTable).values(values);
+      if (values.length > 0) {
+        await tx.insert(studentsTable).values(values);
+      }
     });
 
     return NextResponse.json({ success: true, count: data.length });
