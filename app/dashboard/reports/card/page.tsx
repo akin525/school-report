@@ -354,7 +354,7 @@ function ReportCardContent() {
                     <div key={term} style={{ border: '1.5px solid #dc2626', textAlign: 'center', padding: '2px', background: termData[term]?.overallPercentage ? '#eff6ff' : '#f9fafb' }}>
                       <div style={{ fontWeight: 'bold', fontSize: '7px', color: '#1e40af' }}>{ordinal(term)} TERM OVERALL SCORE:</div>
                       <div style={{ fontWeight: 'bold', fontSize: '14px', color: (termData[term]?.overallPercentage || 0) >= 70 ? '#166534' : '#dc2626' }}>
-                        {termData[term]?.overallPercentage ?? ''}%
+                        {term <= termParam ? `${termData[term]?.overallPercentage ?? ''}%` : ''}
                       </div>
                     </div>
                   ))}
@@ -460,23 +460,23 @@ function ReportCardContent() {
                             {format === 'cumulative' && (
                               <>
                                 {/* 2nd Term */}
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{(t2?.ca1_score || 0) + (t2?.ca2_score || 0) || ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{t2?.exam_score || ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{t2?.total || ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{t2?.class_average !== undefined && t2?.class_average !== null ? Number(t2.class_average).toFixed(1) : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{t2?.position ? ordinal(t2.position) : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t2 ? getGradeColor(t2.grade) : '#374151' }}>{t2?.grade || ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{termParam >= 2 ? ((t2?.ca1_score || 0) + (t2?.ca2_score || 0) || '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{termParam >= 2 ? (t2?.exam_score || '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{termParam >= 2 ? (t2?.total || '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{termParam >= 2 ? (t2?.class_average !== undefined && t2?.class_average !== null ? Number(t2.class_average).toFixed(1) : '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{termParam >= 2 ? (t2?.position ? ordinal(t2.position) : '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t2 ? getGradeColor(t2.grade) : '#374151' }}>{termParam >= 2 ? (t2?.grade || '') : ''}</td>
                                 {/* Cum 1+2 - Using student's average in 'Total' column as requested */}
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 2 && (t1 || t2)) ? row.cum12Ave : ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 2 && (t1 || t2)) ? row.class12Ave : ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: (termParam >= 2 && (t1 || t2)) ? getGradeColor(row.cum12Grade) : '#374151' }}>{(termParam >= 2 && (t1 || t2)) ? row.cum12Grade : ''}</td>
                                 {/* 3rd Term */}
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{(t3?.ca1_score || 0) + (t3?.ca2_score || 0) || ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{t3?.exam_score || ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{t3?.total || ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{t3?.class_average !== undefined && t3?.class_average !== null ? Number(t3.class_average).toFixed(1) : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{t3?.position ? ordinal(t3.position) : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t3 ? getGradeColor(t3.grade) : '#374151' }}>{t3?.grade || ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{termParam >= 3 ? ((t3?.ca1_score || 0) + (t3?.ca2_score || 0) || '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{termParam >= 3 ? (t3?.exam_score || '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{termParam >= 3 ? (t3?.total || '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{termParam >= 3 ? (t3?.class_average !== undefined && t3?.class_average !== null ? Number(t3.class_average).toFixed(1) : '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{termParam >= 3 ? (t3?.position ? ordinal(t3.position) : '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t3 ? getGradeColor(t3.grade) : '#374151' }}>{termParam >= 3 ? (t3?.grade || '') : ''}</td>
                                 {/* Final Cumulative - Using student's average in 'Total' column as requested */}
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 3 && hasData) ? row.cumAve : ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 3 && hasData) ? row.classFinalAve : ''}</td>
@@ -497,12 +497,12 @@ function ReportCardContent() {
                         {format === 'cumulative' && (
                           <>
                             <td colSpan={2} style={{ border: '1px solid #3b82f6' }}></td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px' }}>{termData[2]?.total || ''}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px' }}>{termParam >= 2 ? (termData[2]?.total || '') : ''}</td>
                             <td colSpan={2} style={{ border: '1px solid #3b82f6' }}></td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px', color: '#fde047' }}>{termData[2]?.overallPosition ? ordinal(termData[2].overallPosition) : ''}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px', color: '#fde047' }}>{termParam >= 2 ? (termData[2]?.overallPosition ? ordinal(termData[2].overallPosition) : '') : ''}</td>
                             <td colSpan={3} style={{ border: '1px solid #3b82f6' }}></td>
                             <td colSpan={3} style={{ border: '1px solid #3b82f6' }}></td>
-                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px' }}>{termData[3]?.total || ''}</td>
+                            <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #3b82f6', fontSize: '8px' }}>{termParam >= 3 ? (termData[3]?.total || '') : ''}</td>
                             <td colSpan={2} style={{ border: '1px solid #3b82f6' }}></td>
                             <td colSpan={3} style={{ border: '1px solid #3b82f6' }}></td>
                           </>
@@ -540,9 +540,9 @@ function ReportCardContent() {
                         ].map(t => (
                           <tr key={t.key}>
                             <td style={{ border: '1px solid #fca5a5', padding: '1px 3px' }}>{t.label}</td>
-                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{traits[1]?.[t.key] || '-'}</td>
-                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{traits[2]?.[t.key] || '-'}</td>
-                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{traits[3]?.[t.key] || '-'}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{termParam >= 1 ? (traits[1]?.[t.key] || '-') : ''}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{termParam >= 2 ? (traits[2]?.[t.key] || '-') : ''}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{termParam >= 3 ? (traits[3]?.[t.key] || '-') : ''}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -567,9 +567,9 @@ function ReportCardContent() {
                         {[1, 2, 3].map(t => (
                           <tr key={t}>
                             <td style={{ border: '1px solid #fca5a5', padding: '1px 3px', fontWeight: 'bold' }}>{ordinal(t)} Term</td>
-                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center' }}>{attendance[t]?.days_present || '0'}</td>
-                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center' }}>{attendance[t]?.days_absent || '0'}</td>
-                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{attendance[t]?.total_days || '0'}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center' }}>{t <= termParam ? (attendance[t]?.days_present || '0') : ''}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center' }}>{t <= termParam ? (attendance[t]?.days_absent || '0') : ''}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{t <= termParam ? (attendance[t]?.total_days || '0') : ''}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -599,9 +599,9 @@ function ReportCardContent() {
                     {(format === 'cumulative' ? [1, 2, 3] : [termParam]).map(term => (
                     <div key={term} style={{ border: '1.5px solid #dc2626', padding: '4px', fontSize: '7.5px' }}>
                       <div style={{ fontWeight: 'bold', color: '#1e40af', marginBottom: '2px', fontSize: '7px', borderBottom: '1px solid #fca5a5', paddingBottom: '1px' }}>
-                        Class Teacher's Comment:
+                        {ordinal(term)} Term Class Teacher's Comment:
                       </div>
-                      {editComments ? (
+                      {editComments && term <= termParam ? (
                         <textarea
                           value={comments[term]?.class_teacher_comment || ''}
                           onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], class_teacher_comment: e.target.value } }))}
@@ -610,14 +610,14 @@ function ReportCardContent() {
                         />
                       ) : (
                         <div style={{ fontSize: '7.5px', color: '#374151', minHeight: '35px', lineHeight: 1.4 }}>
-                          {comments[term]?.class_teacher_comment || ''}
+                          {term <= termParam ? (comments[term]?.class_teacher_comment || '') : ''}
                         </div>
                       )}
                       <div style={{ marginTop: '3px', fontSize: '6.5px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <span>Signature:</span>
-                            {comments[term]?.class_teacher_signature ? (
+                            {term <= termParam && comments[term]?.class_teacher_signature ? (
                               <img 
                                 src={comments[term].class_teacher_signature} 
                                 alt="Signature" 
@@ -627,7 +627,7 @@ function ReportCardContent() {
                               <span>___________</span>
                             )}
                           </div>
-                          {editComments ? (
+                          {editComments && term <= termParam ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                               <label style={{ background: '#3b82f6', color: 'white', padding: '1px 3px', borderRadius: '2px', fontSize: '5px', cursor: 'pointer' }}>
                                 Upload
@@ -651,7 +651,7 @@ function ReportCardContent() {
                               <input type="text" placeholder="Date" value={comments[term]?.class_teacher_date || ''} onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], class_teacher_date: e.target.value } }))} style={{ width: '45px', fontSize: '6px', border: '1px solid #ccc' }} />
                             </div>
                           ) : (
-                            <span>Date: {comments[term]?.class_teacher_date || ''}</span>
+                            <span>Date: {term <= termParam ? (comments[term]?.class_teacher_date || '') : ''}</span>
                           )}
                         </div>
                         {/*<div style={{ fontWeight: 'bold', textDecoration: 'underline' }}>{classTeacher?.name || '—'}</div>*/}
@@ -659,7 +659,7 @@ function ReportCardContent() {
                       <div style={{ marginTop: '4px', fontWeight: 'bold', color: '#1e40af', fontSize: '7px', borderTop: '1px solid #fca5a5', paddingTop: '2px', marginBottom: '2px' }}>
                         Coordinator's Remarks:
                       </div>
-                      {editComments ? (
+                      {editComments && term <= termParam ? (
                         <textarea
                           value={comments[term]?.coordinator_remark || ''}
                           onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], coordinator_remark: e.target.value } }))}
@@ -669,13 +669,13 @@ function ReportCardContent() {
                         />
                       ) : (
                         <div style={{ fontSize: '7.5px', color: '#374151', minHeight: '28px', lineHeight: 1.4 }}>
-                          {comments[term]?.coordinator_remark || ''}
+                          {term <= termParam ? (comments[term]?.coordinator_remark || '') : ''}
                         </div>
                       )}
                       <div style={{ marginTop: '2px', fontSize: '6.5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <span>Signature:</span>
-                          {comments[term]?.coordinator_signature ? (
+                          {term <= termParam && comments[term]?.coordinator_signature ? (
                             <img 
                               src={comments[term].coordinator_signature} 
                               alt="Signature" 
@@ -685,7 +685,7 @@ function ReportCardContent() {
                             <span>___________</span>
                           )}
                         </div>
-                        {editComments ? (
+                        {editComments && term <= termParam ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                             {user?.role !== 'teacher' && (
                               <label style={{ background: '#3b82f6', color: 'white', padding: '1px 3px', borderRadius: '2px', fontSize: '5px', cursor: 'pointer' }}>
@@ -718,17 +718,17 @@ function ReportCardContent() {
                             />
                           </div>
                         ) : (
-                          <span>Date: {comments[term]?.coordinator_date || ''}</span>
+                          <span>Date: {term <= termParam ? (comments[term]?.coordinator_date || '') : ''}</span>
                         )}
                       </div>
                       <div style={{ marginTop: '3px', fontSize: '6.5px', borderTop: '1px solid #fca5a5', paddingTop: '2px' }}>
-                        {editComments ? (
+                        {editComments && term <= termParam ? (
                           <div>
                             <span style={{ fontWeight: 'bold' }}>Next Term Starts:</span>
                             <input type="text" value={comments[term]?.next_term_starts || ''} onChange={e => setComments(prev => ({ ...prev, [term]: { ...prev[term], next_term_starts: e.target.value } }))} style={{ width: '80px', fontSize: '6px', border: '1px solid #ccc', marginLeft: '3px' }} />
                           </div>
                         ) : (
-                          <span>{term === 1 ? '2nd' : term === 2 ? '3rd' : 'Next Session'} Term Starts: <strong>{comments[term]?.next_term_starts || '_______________'}</strong></span>
+                          <span>{term === 1 ? '2nd' : term === 2 ? '3rd' : 'Next Session'} Term Starts: <strong>{term <= termParam ? (comments[term]?.next_term_starts || '_______________') : '_______________'}</strong></span>
                         )}
                       </div>
                     </div>

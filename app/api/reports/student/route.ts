@@ -103,6 +103,11 @@ export async function GET(req: NextRequest) {
     const classScores = await db.select({
       student_id: scores.student_id,
       subject_id: scores.subject_id,
+      ca1_score: scores.ca1_score,
+      ca2_score: scores.ca2_score,
+      exam_score: scores.exam_score,
+      t1: scores.t1, t2: scores.t2, t3: scores.t3, t4: scores.t4, t5: scores.t5,
+      t6: scores.t6, t7: scores.t7, t8: scores.t8, t9: scores.t9, t10: scores.t10,
       total: scores.total
     })
       .from(scores)
@@ -120,54 +125,65 @@ export async function GET(req: NextRequest) {
 
     for (const cs of classScores) {
       if (!subjectTotals[cs.subject_id]) subjectTotals[cs.subject_id] = [];
-      subjectTotals[cs.subject_id].push(cs.total || 0);
+      const manualTotal = (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0) +
+                         [cs.t1, cs.t2, cs.t3, cs.t4, cs.t5, cs.t6, cs.t7, cs.t8, cs.t9, cs.t10].reduce((acc, v) => acc + (v ? parseFloat(v as any) : 0), 0);
+      const effectiveTotal = cs.total || manualTotal || 0;
+      subjectTotals[cs.subject_id].push(effectiveTotal);
     }
 
     for (const [subId, totals] of Object.entries(subjectTotals)) {
       const sorted = [...totals].sort((a, b) => b - a);
       const studentScore = classScores.find(cs => cs.student_id === studentId && cs.subject_id === subId);
       if (studentScore) {
-        subjectPositions[subId] = sorted.indexOf(studentScore.total || 0) + 1;
+        const manualTotal = (studentScore.ca1_score || 0) + (studentScore.ca2_score || 0) + (studentScore.exam_score || 0) +
+                           [studentScore.t1, studentScore.t2, studentScore.t3, studentScore.t4, studentScore.t5, studentScore.t6, studentScore.t7, studentScore.t8, studentScore.t9, studentScore.t10].reduce((acc, v) => acc + (v ? parseFloat(v as any) : 0), 0);
+        const effectiveTotal = studentScore.total || manualTotal || 0;
+        subjectPositions[subId] = sorted.indexOf(effectiveTotal) + 1;
       }
       const sum = totals.reduce((a, b) => a + b, 0);
       subjectAverages[subId] = totals.length > 0 ? Math.round((sum / totals.length) * 10) / 10 : 0;
     }
 
     // Class total scores for overall position
-    const allStudentTotals = await db.select({
-      student_id: scores.student_id,
-      grand_total: sql<number>`SUM(${scores.total})`
-    })
-      .from(scores)
-      .where(and(
-        eq(scores.class_id, student.class_id || ''),
-        eq(scores.session_id, sessionId),
-        eq(scores.term, term),
-        eq(scores.school_id, schoolId || '')
-      ))
-      .groupBy(scores.student_id);
+    const allStudentTotalsMap: Record<string, number> = {};
+    classScores.forEach(cs => {
+      const manualTotal = (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0) +
+                         [cs.t1, cs.t2, cs.t3, cs.t4, cs.t5, cs.t6, cs.t7, cs.t8, cs.t9, cs.t10].reduce((acc, v) => acc + (v ? parseFloat(v as any) : 0), 0);
+      const effectiveTotal = cs.total || manualTotal || 0;
+      allStudentTotalsMap[cs.student_id] = (allStudentTotalsMap[cs.student_id] || 0) + effectiveTotal;
+    });
 
-    const classSize = allStudentTotals.length;
-    let studentTotal = allStudentTotals.find(s => s.student_id === studentId)?.grand_total || 0;
-    if (studentTotal === 0 && termScores.length > 0) {
-      studentTotal = termScores.reduce((sum, s: any) => sum + (s.total || 0), 0);
-    }
-    const sortedTotals = [...allStudentTotals].sort((a, b) => b.grand_total - a.grand_total);
+    const allStudentTotalsList = Object.entries(allStudentTotalsMap).map(([id, total]) => ({ student_id: id, grand_total: total }));
+    const classSize = allStudentTotalsList.length;
+    let studentTotal = allStudentTotalsMap[studentId] || 0;
+
+    const sortedTotals = [...allStudentTotalsList].sort((a, b) => b.grand_total - a.grand_total);
     const overallPosition = sortedTotals.findIndex(s => s.student_id === studentId) + 1;
 
-    const subjectsTaken = termScores.length;
-    const maxScorePossible = subjectsTaken * 100;
-    const overallPercentage = maxScorePossible > 0 ? Math.round((studentTotal / maxScorePossible) * 100) : 0;
+    // Map scores and ensure total is calculated if it's 0 but ca/exam exists
+    const processedTermScores = termScores.map((s: any) => {
+      const manualTotal = (s.ca1_score || 0) + (s.ca2_score || 0) + (s.exam_score || 0) +
+                         [s.t1, s.t2, s.t3, s.t4, s.t5, s.t6, s.t7, s.t8, s.t9, s.t10].reduce((acc, v) => acc + (v ? parseFloat(v) : 0), 0);
+      const effectiveTotal = (s.total || manualTotal || 0);
 
-    termData[term] = {
-      scores: termScores.map((s: any) => ({
+      return {
         ...s,
-        grade: calculateGrade(s.total || 0, 100, grading).grade,
+        total: effectiveTotal,
+        grade: calculateGrade(effectiveTotal, 100, grading).grade,
         position: subjectPositions[s.subject_id] || 0,
         class_average: subjectAverages[s.subject_id] || 0,
         classSize,
-      })),
-      total: studentTotal,
+      };
+    });
+
+    const studentTotalAdjusted = processedTermScores.reduce((sum, s) => sum + (s.total || 0), 0);
+    const subjectsTaken = processedTermScores.length;
+    const maxScorePossible = subjectsTaken * 100;
+    const overallPercentage = maxScorePossible > 0 ? Math.round((studentTotalAdjusted / maxScorePossible) * 100) : 0;
+
+    termData[term] = {
+      scores: processedTermScores,
+      total: studentTotalAdjusted,
       overallPercentage,
       overallPosition,
       classSize,
