@@ -350,11 +350,11 @@ function ReportCardContent() {
 
                 {/* Term Overall Scores */}
                 <div style={{ display: 'grid', gridTemplateColumns: format === 'single' ? '1fr' : 'repeat(3, 1fr)', gap: '3px', marginBottom: '3px' }}>
-                  {(format === 'cumulative' ? [1, 2, 3] : [termParam]).map(term => (
+                  {[1, 2, 3].map(term => (
                     <div key={term} style={{ border: '1.5px solid #dc2626', textAlign: 'center', padding: '2px', background: termData[term]?.overallPercentage ? '#eff6ff' : '#f9fafb' }}>
                       <div style={{ fontWeight: 'bold', fontSize: '7px', color: '#1e40af' }}>{ordinal(term)} TERM OVERALL SCORE:</div>
                       <div style={{ fontWeight: 'bold', fontSize: '14px', color: (termData[term]?.overallPercentage || 0) >= 70 ? '#166534' : '#dc2626' }}>
-                        {term <= termParam ? `${termData[term]?.overallPercentage ?? ''}%` : ''}
+                        {term <= termParam && termData[term] ? `${termData[term].overallPercentage}%` : ''}
                       </div>
                     </div>
                   ))}
@@ -460,24 +460,24 @@ function ReportCardContent() {
                             {format === 'cumulative' && (
                               <>
                                 {/* 2nd Term */}
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{termParam >= 2 ? ((t2?.ca1_score || 0) + (t2?.ca2_score || 0) || '') : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{termParam >= 2 ? (t2?.exam_score || '') : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{termParam >= 2 ? (t2?.total || '') : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{termParam >= 2 ? (t2?.class_average !== undefined && t2?.class_average !== null ? Number(t2.class_average).toFixed(1) : '') : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{termParam >= 2 ? (t2?.position ? ordinal(t2.position) : '') : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t2 ? getGradeColor(t2.grade) : '#374151' }}>{termParam >= 2 ? (t2?.grade || '') : ''}</td>
-                                {/* Cum 1+2 - Using student's average in 'Total' column as requested */}
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{(termParam >= 2 && t2) ? ((t2.ca1_score || 0) + (t2.ca2_score || 0) || '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{(termParam >= 2 && t2) ? (t2.exam_score || '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{(termParam >= 2 && t2) ? (t2.total || '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{(termParam >= 2 && t2) ? (t2.class_average !== undefined && t2.class_average !== null ? Number(t2.class_average).toFixed(1) : '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{(termParam >= 2 && t2) ? (t2.position ? ordinal(t2.position) : '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t2 ? getGradeColor(t2.grade) : '#374151' }}>{(termParam >= 2 && t2) ? (t2.grade || '') : ''}</td>
+                                {/* Cum 1+2 */}
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 2 && (t1 || t2)) ? row.cum12Ave : ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 2 && (t1 || t2)) ? row.class12Ave : ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: (termParam >= 2 && (t1 || t2)) ? getGradeColor(row.cum12Grade) : '#374151' }}>{(termParam >= 2 && (t1 || t2)) ? row.cum12Grade : ''}</td>
                                 {/* 3rd Term */}
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{termParam >= 3 ? ((t3?.ca1_score || 0) + (t3?.ca2_score || 0) || '') : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{termParam >= 3 ? (t3?.exam_score || '') : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{termParam >= 3 ? (t3?.total || '') : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{termParam >= 3 ? (t3?.class_average !== undefined && t3?.class_average !== null ? Number(t3.class_average).toFixed(1) : '') : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{termParam >= 3 ? (t3?.position ? ordinal(t3.position) : '') : ''}</td>
-                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t3 ? getGradeColor(t3.grade) : '#374151' }}>{termParam >= 3 ? (t3?.grade || '') : ''}</td>
-                                {/* Final Cumulative - Using student's average in 'Total' column as requested */}
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{(termParam >= 3 && t3) ? ((t3.ca1_score || 0) + (t3.ca2_score || 0) || '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', color: '#374151' }}>{(termParam >= 3 && t3) ? (t3.exam_score || '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: '#1e1e1e' }}>{(termParam >= 3 && t3) ? (t3.total || '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px', color: '#6b7280' }}>{(termParam >= 3 && t3) ? (t3.class_average !== undefined && t3.class_average !== null ? Number(t3.class_average).toFixed(1) : '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontSize: '7px' }}>{(termParam >= 3 && t3) ? (t3.position ? ordinal(t3.position) : '') : ''}</td>
+                                <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', color: t3 ? getGradeColor(t3.grade) : '#374151' }}>{(termParam >= 3 && t3) ? (t3.grade || '') : ''}</td>
+                                {/* Final Cumulative */}
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 3 && hasData) ? row.cumAve : ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', background: '#f0fdf4', color: '#166534' }}>{(termParam >= 3 && hasData) ? row.classFinalAve : ''}</td>
                                 <td style={{ padding: '1px 2px', textAlign: 'center', border: '1px solid #fca5a5', fontWeight: 'bold', background: '#f0fdf4', color: (termParam >= 3 && hasData) ? getGradeColor(row.cumGrade) : '#374151' }}>{(termParam >= 3 && hasData) ? row.cumGrade : ''}</td>
@@ -540,9 +540,9 @@ function ReportCardContent() {
                         ].map(t => (
                           <tr key={t.key}>
                             <td style={{ border: '1px solid #fca5a5', padding: '1px 3px' }}>{t.label}</td>
-                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{termParam >= 1 ? (traits[1]?.[t.key] || '-') : ''}</td>
-                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{termParam >= 2 ? (traits[2]?.[t.key] || '-') : ''}</td>
-                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{termParam >= 3 ? (traits[3]?.[t.key] || '-') : ''}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{termParam >= 1 && traits[1] ? (traits[1][t.key] || '-') : ''}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{termParam >= 2 && traits[2] ? (traits[2][t.key] || '-') : ''}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{termParam >= 3 && traits[3] ? (traits[3][t.key] || '-') : ''}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -567,9 +567,9 @@ function ReportCardContent() {
                         {[1, 2, 3].map(t => (
                           <tr key={t}>
                             <td style={{ border: '1px solid #fca5a5', padding: '1px 3px', fontWeight: 'bold' }}>{ordinal(t)} Term</td>
-                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center' }}>{t <= termParam ? (attendance[t]?.days_present || '0') : ''}</td>
-                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center' }}>{t <= termParam ? (attendance[t]?.days_absent || '0') : ''}</td>
-                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{t <= termParam ? (attendance[t]?.total_days || '0') : ''}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center' }}>{t <= termParam && attendance[t] ? (attendance[t].times_present || '0') : ''}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center' }}>{t <= termParam && attendance[t] ? (attendance[t].times_school_opened - attendance[t].times_present || '0') : ''}</td>
+                            <td style={{ border: '1px solid #fca5a5', textAlign: 'center', fontWeight: 'bold' }}>{t <= termParam && attendance[t] ? (attendance[t].times_school_opened || '0') : ''}</td>
                           </tr>
                         ))}
                       </tbody>

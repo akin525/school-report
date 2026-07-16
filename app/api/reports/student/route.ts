@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
   const termData: Record<number, any> = {};
 
   for (const term of [1, 2, 3]) {
-    const termScores = allScores.filter((s: any) => s.term === term);
+    const termScores = allScores.filter((s: any) => Number(s.term) === term);
 
     // Get all students' scores in same class for position calculation
     const classScores = await db.select({
@@ -158,7 +158,7 @@ export async function GET(req: NextRequest) {
     let studentTotal = allStudentTotalsMap[studentId] || 0;
 
     const sortedTotals = [...allStudentTotalsList].sort((a, b) => b.grand_total - a.grand_total);
-    const overallPosition = sortedTotals.findIndex(s => s.student_id === studentId) + 1;
+    const overallPosition = sortedTotals.length > 0 ? sortedTotals.findIndex(s => s.student_id === studentId) + 1 : 0;
 
     // Map scores and ensure total is calculated if it's 0 but ca/exam exists
     const processedTermScores = termScores.map((s: any) => {
@@ -172,11 +172,11 @@ export async function GET(req: NextRequest) {
         grade: calculateGrade(effectiveTotal, 100, grading).grade,
         position: subjectPositions[s.subject_id] || 0,
         class_average: subjectAverages[s.subject_id] || 0,
-        classSize,
+        classSize: classSize || 1,
       };
     });
 
-    const studentTotalAdjusted = processedTermScores.reduce((sum, s) => sum + (s.total || 0), 0);
+    const studentTotalAdjusted = processedTermScores.length > 0 ? processedTermScores.reduce((sum, s) => sum + (s.total || 0), 0) : studentTotal;
     const subjectsTaken = processedTermScores.length;
     const maxScorePossible = subjectsTaken * 100;
     const overallPercentage = maxScorePossible > 0 ? Math.round((studentTotalAdjusted / maxScorePossible) * 100) : 0;
@@ -186,7 +186,7 @@ export async function GET(req: NextRequest) {
       total: studentTotalAdjusted,
       overallPercentage,
       overallPosition,
-      classSize,
+      classSize: classSize || 1,
     };
   }
 
@@ -214,12 +214,12 @@ export async function GET(req: NextRequest) {
       eq(teacherComments.school_id, schoolId || '')
     ));
 
-  // Build subject list
+  // Build subject list - find all subjects the student has scores for across all terms
   const allSubjectIds = new Set(allScores.map((s: any) => s.subject_id));
   const allSubjects = Array.from(allSubjectIds).map(id => {
     const s = allScores.find((sc: any) => sc.subject_id === id) as any;
     return { id, name: s?.subject_name || '', category: s?.category || '' };
-  }).sort((a, b) => a.name.localeCompare(b.name));
+  }).filter(s => s.name).sort((a, b) => a.name.localeCompare(b.name));
 
   // Compute cumulative data
   const subjectCumulative = allSubjects.map(sub => {
@@ -227,16 +227,16 @@ export async function GET(req: NextRequest) {
     const t2 = termData[2]?.scores.find((s: any) => s.subject_id === sub.id);
     const t3 = termData[3]?.scores.find((s: any) => s.subject_id === sub.id);
 
-    const validTerms12 = [t1, t2].filter(t => t && (t.total || 0) > 0);
+    const validTerms12 = [t1, t2].filter(t => t);
     const cum12Total = validTerms12.reduce((sum, t) => sum + (t?.total || 0), 0);
     const cum12Ave = validTerms12.length > 0 ? cum12Total / validTerms12.length : 0;
-    const cum12Grade = cum12Ave > 0 ? calculateGrade(cum12Ave, 100, grading).grade : '';
+    const cum12Grade = validTerms12.length > 0 ? calculateGrade(cum12Ave, 100, grading).grade : '';
     const class12Ave = validTerms12.length > 0 ? validTerms12.reduce((sum, t) => sum + (t?.class_average || 0), 0) / validTerms12.length : 0;
 
-    const validTermsFinal = [t1, t2, t3].filter(t => t && (t.total || 0) > 0);
+    const validTermsFinal = [t1, t2, t3].filter(t => t);
     const cumFinalTotal = validTermsFinal.reduce((sum, t) => sum + (t?.total || 0), 0);
     const cumFinalAve = validTermsFinal.length > 0 ? cumFinalTotal / validTermsFinal.length : 0;
-    const cumFinalGrade = cumFinalAve > 0 ? calculateGrade(cumFinalAve, 100, grading).grade : '';
+    const cumFinalGrade = validTermsFinal.length > 0 ? calculateGrade(cumFinalAve, 100, grading).grade : '';
     const classFinalAve = validTermsFinal.length > 0 ? validTermsFinal.reduce((sum, t) => sum + (t?.class_average || 0), 0) / validTermsFinal.length : 0;
 
     return {

@@ -85,15 +85,19 @@ export async function GET(req: NextRequest) {
     let subjectCount = 0;
 
     for (const subject of subjectsWithScores) {
-      const score = allScores.find(s => s.student_id === student.id && s.subject_id === subject.id);
+      const score = allScores.find(s => s.student_id === student.id && s.subject_id === subject.id && Number(s.term) === term);
       if (score) {
+        const manualTotal = (score.ca1_score || 0) + (score.ca2_score || 0) + (score.exam_score || 0) +
+                           [score.t1, score.t2, score.t3, score.t4, score.t5, score.t6, score.t7, score.t8, score.t9, score.t10].reduce((acc, v) => acc + (v ? parseFloat(v as any) : 0), 0);
+        const effectiveTotal = score.total || manualTotal || 0;
+
         studentScores[subject.id] = {
-          ca: score.ca1_score! + (score.ca2_score || 0), // Adjust based on how 'total' was handled in SQLite
+          ca: (score.ca1_score || 0) + (score.ca2_score || 0),
           exam: score.exam_score,
-          total: score.total,
-          grade: calculateGrade(score.total || 0, 100, grading).grade,
+          total: effectiveTotal,
+          grade: calculateGrade(effectiveTotal, 100, grading).grade,
         };
-        grandTotal += score.total || 0;
+        grandTotal += effectiveTotal;
         subjectCount++;
       } else {
         studentScores[subject.id] = null;
