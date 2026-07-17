@@ -122,8 +122,9 @@ export async function GET(req: NextRequest) {
         [score.t1, score.t2, score.t3, score.t4, score.t5, score.t6, score.t7, score.t8, score.t9, score.t10].forEach(v => {
           if (v) extraTotal += Number(v);
         });
-        const manualTotal = (score.ca1_score || 0) + (score.ca2_score || 0) + (score.exam_score || 0) + extraTotal;
-        const effectiveTotal = score.total || manualTotal || 0;
+        const caTotal = Math.max((score.ca1_score || 0) + (score.ca2_score || 0), extraTotal);
+        const manualTotal = caTotal + (score.exam_score || 0);
+        const effectiveTotal = Math.min(100, score.total && score.total > 0 && score.total <= 100 ? score.total : manualTotal);
 
         studentScores[subject.id] = {
           ca: (score.ca1_score || 0) + (score.ca2_score || 0),

@@ -122,13 +122,13 @@ export async function POST(req: NextRequest) {
             ca1_score: item.ca1 || 0,
             ca2_score: item.ca2 || 0,
             exam_score: item.exam || 0,
-            total: (item.ca1 || 0) + (item.ca2 || 0) + (item.exam || 0)
+            total: Math.min(100, (item.ca1 || 0) + (item.ca2 || 0) + (item.exam || 0))
           }).onDuplicateKeyUpdate({
             set: {
               ca1_score: item.ca1 || 0,
               ca2_score: item.ca2 || 0,
               exam_score: item.exam || 0,
-              total: (item.ca1 || 0) + (item.ca2 || 0) + (item.exam || 0),
+              total: Math.min(100, (item.ca1 || 0) + (item.ca2 || 0) + (item.exam || 0)),
               updated_at: new Date()
             }
           });
