@@ -57,9 +57,12 @@ export async function GET(req: NextRequest) {
   const schoolResult = await db.select().from(schools).where(eq(schools.id, schoolId || '')).limit(1);
   const school = schoolResult[0];
 
-  // Get grading system
+  // Get grading system based on student's class category
   const grading = await db.select().from(gradingSystem)
-    .where(eq(gradingSystem.school_id, schoolId || ''))
+    .where(and(
+      eq(gradingSystem.school_id, schoolId || ''),
+      eq(gradingSystem.category, student.class_category || 'secondary')
+    ))
     .orderBy(desc(gradingSystem.min_score));
 
   // Get class teacher
@@ -133,10 +136,8 @@ export async function GET(req: NextRequest) {
       [cs.t1, cs.t2, cs.t3, cs.t4, cs.t5, cs.t6, cs.t7, cs.t8, cs.t9, cs.t10].forEach(v => {
         if (v) extraTotal += Number(v);
       });
-      // Correct calculation: use max of ca1+ca2 and extraTotal to avoid double counting
-      const caTotal = Math.max((cs.ca1_score || 0) + (cs.ca2_score || 0), extraTotal);
-      const manualTotal = caTotal + (cs.exam_score || 0);
-      const effectiveTotal = Math.min(100, cs.total && cs.total > 0 && cs.total <= 100 ? cs.total : manualTotal);
+      const manualTotal = (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0) + extraTotal;
+      const effectiveTotal = cs.total || manualTotal || 0;
       subjectTotals[cs.subject_id].push(effectiveTotal);
     }
 
@@ -148,9 +149,8 @@ export async function GET(req: NextRequest) {
         [studentScore.t1, studentScore.t2, studentScore.t3, studentScore.t4, studentScore.t5, studentScore.t6, studentScore.t7, studentScore.t8, studentScore.t9, studentScore.t10].forEach(v => {
           if (v) extraTotal += Number(v);
         });
-        const caTotal = Math.max((studentScore.ca1_score || 0) + (studentScore.ca2_score || 0), extraTotal);
-        const manualTotal = caTotal + (studentScore.exam_score || 0);
-        const effectiveTotal = Math.min(100, studentScore.total && studentScore.total > 0 && studentScore.total <= 100 ? studentScore.total : manualTotal);
+        const manualTotal = (studentScore.ca1_score || 0) + (studentScore.ca2_score || 0) + (studentScore.exam_score || 0) + extraTotal;
+        const effectiveTotal = studentScore.total || manualTotal || 0;
         subjectPositions[subId] = sorted.indexOf(effectiveTotal) + 1;
       }
       const sum = totals.reduce((a, b) => a + b, 0);
@@ -164,9 +164,8 @@ export async function GET(req: NextRequest) {
       [cs.t1, cs.t2, cs.t3, cs.t4, cs.t5, cs.t6, cs.t7, cs.t8, cs.t9, cs.t10].forEach(v => {
         if (v) extraTotal += Number(v);
       });
-      const caTotal = Math.max((cs.ca1_score || 0) + (cs.ca2_score || 0), extraTotal);
-      const manualTotal = caTotal + (cs.exam_score || 0);
-      const effectiveTotal = Math.min(100, cs.total && cs.total > 0 && cs.total <= 100 ? cs.total : manualTotal);
+      const manualTotal = (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0) + extraTotal;
+      const effectiveTotal = cs.total || manualTotal || 0;
       allStudentTotalsMap[cs.student_id] = (allStudentTotalsMap[cs.student_id] || 0) + effectiveTotal;
     });
 
@@ -183,9 +182,8 @@ export async function GET(req: NextRequest) {
       [s.t1, s.t2, s.t3, s.t4, s.t5, s.t6, s.t7, s.t8, s.t9, s.t10].forEach(v => {
         if (v) extraTotal += Number(v);
       });
-      const caTotal = Math.max((s.ca1_score || 0) + (s.ca2_score || 0), extraTotal);
-      const manualTotal = caTotal + (s.exam_score || 0);
-      const effectiveTotal = Math.min(100, s.total && s.total > 0 && s.total <= 100 ? s.total : manualTotal);
+      const manualTotal = (s.ca1_score || 0) + (s.ca2_score || 0) + (s.exam_score || 0) + extraTotal;
+      const effectiveTotal = (s.total || manualTotal || 0);
 
       return {
         ...s,

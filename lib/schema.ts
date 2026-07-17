@@ -138,6 +138,7 @@ export const scores = mysqlTable('scores', {
 
 export const gradingSystem = mysqlTable('grading_system', {
   id: varchar('id', { length: 36 }).primaryKey(),
+  category: mysqlEnum('category', ['nursery', 'primary', 'secondary']).default('secondary'),
   school_id: varchar('school_id', { length: 36 }).notNull(),
   grade: varchar('grade', { length: 10 }).notNull(),
   min_score: double('min_score').notNull(),

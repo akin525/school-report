@@ -32,7 +32,10 @@ export async function GET(req: NextRequest) {
   const academicSession = academicSessionResult[0];
 
   const grading = await db.select().from(gradingSystem)
-    .where(eq(gradingSystem.school_id, schoolId || ''))
+    .where(and(
+      eq(gradingSystem.school_id, schoolId || ''),
+      eq(gradingSystem.category, classInfo?.category || 'secondary')
+    ))
     .orderBy(desc(gradingSystem.min_score));
 
   // Get class teacher
@@ -122,9 +125,8 @@ export async function GET(req: NextRequest) {
         [score.t1, score.t2, score.t3, score.t4, score.t5, score.t6, score.t7, score.t8, score.t9, score.t10].forEach(v => {
           if (v) extraTotal += Number(v);
         });
-        const caTotal = Math.max((score.ca1_score || 0) + (score.ca2_score || 0), extraTotal);
-        const manualTotal = caTotal + (score.exam_score || 0);
-        const effectiveTotal = Math.min(100, score.total && score.total > 0 && score.total <= 100 ? score.total : manualTotal);
+        const manualTotal = (score.ca1_score || 0) + (score.ca2_score || 0) + (score.exam_score || 0) + extraTotal;
+        const effectiveTotal = score.total || manualTotal || 0;
 
         studentScores[subject.id] = {
           ca: (score.ca1_score || 0) + (score.ca2_score || 0),

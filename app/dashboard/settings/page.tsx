@@ -16,9 +16,10 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [grading, setGrading] = useState<any[]>([]);
+  const [filterCategory, setFilterCategory] = useState<'nursery' | 'primary' | 'secondary'>('secondary');
   const [showGradeModal, setShowGradeModal] = useState(false);
   const [editingGrade, setEditingGrade] = useState<any>(null);
-  const [gradeForm, setGradeForm] = useState({ grade: '', min_score: 0, max_score: 0, remark: '', color: '#000000' });
+  const [gradeForm, setGradeForm] = useState({ category: 'secondary', grade: '', min_score: 0, max_score: 0, remark: '', color: '#000000' });
   const [savingGrade, setSavingGrade] = useState(false);
   const [msg, setMsg] = useState('');
   const [repairing, setRepairing] = useState(false);
@@ -32,10 +33,10 @@ export default function SettingsPage() {
   const openGradeModal = (grade?: any) => {
     if (grade) {
       setEditingGrade(grade);
-      setGradeForm({ grade: grade.grade, min_score: grade.min_score, max_score: grade.max_score, remark: grade.remark, color: grade.color });
+      setGradeForm({ category: grade.category || 'secondary', grade: grade.grade, min_score: grade.min_score, max_score: grade.max_score, remark: grade.remark, color: grade.color });
     } else {
       setEditingGrade(null);
-      setGradeForm({ grade: '', min_score: 0, max_score: 0, remark: '', color: '#000000' });
+      setGradeForm({ category: filterCategory, grade: '', min_score: 0, max_score: 0, remark: '', color: '#000000' });
     }
     setShowGradeModal(true);
   };
@@ -441,11 +442,22 @@ export default function SettingsPage() {
       <div className="card mt-6">
         <div className="flex items-center justify-between border-b pb-3 mb-4">
           <h2 className="text-lg font-bold text-gray-700">Grading System</h2>
-          {user?.role !== 'teacher' && (
-            <button onClick={() => openGradeModal()} className="btn-primary text-sm px-4 py-1.5">+ Add Grade</button>
-          )}
+          <div className="flex items-center gap-3">
+            <select
+              className="input text-xs py-1.5"
+              value={filterCategory}
+              onChange={e => setFilterCategory(e.target.value as any)}
+            >
+              <option value="nursery">Nursery</option>
+              <option value="primary">Primary</option>
+              <option value="secondary">Secondary</option>
+            </select>
+            {user?.role !== 'teacher' && (
+              <button onClick={() => openGradeModal()} className="btn-primary text-sm px-4 py-1.5">+ Add Grade</button>
+            )}
+          </div>
         </div>
-        <p className="text-sm text-gray-500 mb-4 italic">* Define the grade boundaries for your school. These will be used for report cards and broadsheets.</p>
+        <p className="text-sm text-gray-500 mb-4 italic">* Define the grade boundaries for each section. These will be used for report cards and broadsheets.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -459,7 +471,7 @@ export default function SettingsPage() {
               </tr>
             </thead>
             <tbody>
-              {grading.map((g) => (
+              {grading.filter(g => (g.category || 'secondary') === filterCategory).map((g) => (
                 <tr key={g.id} className="hover:bg-gray-50">
                   <td className="px-4 py-2 border font-bold" style={{ color: g.color }}>{g.grade}</td>
                   <td className="px-4 py-2 border">{g.min_score}%</td>
@@ -481,9 +493,9 @@ export default function SettingsPage() {
                   )}
                 </tr>
               ))}
-              {grading.length === 0 && (
+              {grading.filter(g => (g.category || 'secondary') === filterCategory).length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">No grading rules found. Please add some.</td>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">No grading rules found for {filterCategory}. Please add some.</td>
                 </tr>
               )}
             </tbody>
@@ -500,6 +512,14 @@ export default function SettingsPage() {
               <button onClick={() => setShowGradeModal(false)} className="text-2xl leading-none">×</button>
             </div>
             <div className="p-6 space-y-4">
+              <div>
+                <label className="label">Section/Category</label>
+                <select className="input" value={gradeForm.category} onChange={e => setGradeForm({...gradeForm, category: e.target.value})}>
+                  <option value="nursery">Nursery</option>
+                  <option value="primary">Primary</option>
+                  <option value="secondary">Secondary</option>
+                </select>
+              </div>
               <div>
                 <label className="label">Grade Name (e.g., A+)</label>
                 <input type="text" className="input" value={gradeForm.grade} onChange={e => setGradeForm({...gradeForm, grade: e.target.value})} placeholder="A+" />
