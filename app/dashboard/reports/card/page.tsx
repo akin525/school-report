@@ -756,7 +756,7 @@ function ReportCardContent() {
           body { margin: 0; padding: 0; background: white; }
           #report-card { box-shadow: none !important; width: 100% !important; height: auto !important; min-height: 0 !important; }
           @page { 
-            size: A4 ${format === 'single' ? 'portrait' : 'landscape'}; 
+            size: A4 portrait;
             margin: 3mm; 
           }
         }
