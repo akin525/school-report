@@ -132,12 +132,8 @@ export async function GET(req: NextRequest) {
 
     for (const cs of classScores) {
       if (!subjectTotals[cs.subject_id]) subjectTotals[cs.subject_id] = [];
-      let extraTotal = 0;
-      [cs.t1, cs.t2, cs.t3, cs.t4, cs.t5, cs.t6, cs.t7, cs.t8, cs.t9, cs.t10].forEach(v => {
-        if (v) extraTotal += Number(v);
-      });
-      const manualTotal = (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0) + extraTotal;
-      const effectiveTotal = cs.total || manualTotal || 0;
+      // Recalculate total solely based on CA summary and Exam to ensure consistency and fix old buggy data
+      const effectiveTotal = Math.min(100, (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0));
       subjectTotals[cs.subject_id].push(effectiveTotal);
     }
 
@@ -145,12 +141,7 @@ export async function GET(req: NextRequest) {
       const sorted = [...totals].sort((a, b) => b - a);
       const studentScore = classScores.find(cs => cs.student_id === studentId && cs.subject_id === subId);
       if (studentScore) {
-        let extraTotal = 0;
-        [studentScore.t1, studentScore.t2, studentScore.t3, studentScore.t4, studentScore.t5, studentScore.t6, studentScore.t7, studentScore.t8, studentScore.t9, studentScore.t10].forEach(v => {
-          if (v) extraTotal += Number(v);
-        });
-        const manualTotal = (studentScore.ca1_score || 0) + (studentScore.ca2_score || 0) + (studentScore.exam_score || 0) + extraTotal;
-        const effectiveTotal = studentScore.total || manualTotal || 0;
+        const effectiveTotal = Math.min(100, (studentScore.ca1_score || 0) + (studentScore.ca2_score || 0) + (studentScore.exam_score || 0));
         subjectPositions[subId] = sorted.indexOf(effectiveTotal) + 1;
       }
       const sum = totals.reduce((a, b) => a + b, 0);
@@ -160,12 +151,7 @@ export async function GET(req: NextRequest) {
     // Class total scores for overall position
     const allStudentTotalsMap: Record<string, number> = {};
     classScores.forEach(cs => {
-      let extraTotal = 0;
-      [cs.t1, cs.t2, cs.t3, cs.t4, cs.t5, cs.t6, cs.t7, cs.t8, cs.t9, cs.t10].forEach(v => {
-        if (v) extraTotal += Number(v);
-      });
-      const manualTotal = (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0) + extraTotal;
-      const effectiveTotal = cs.total || manualTotal || 0;
+      const effectiveTotal = Math.min(100, (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0));
       allStudentTotalsMap[cs.student_id] = (allStudentTotalsMap[cs.student_id] || 0) + effectiveTotal;
     });
 
@@ -178,12 +164,7 @@ export async function GET(req: NextRequest) {
 
     // Map scores and ensure total is calculated if it's 0 but ca/exam exists
     const processedTermScores = termScores.map((s: any) => {
-      let extraTotal = 0;
-      [s.t1, s.t2, s.t3, s.t4, s.t5, s.t6, s.t7, s.t8, s.t9, s.t10].forEach(v => {
-        if (v) extraTotal += Number(v);
-      });
-      const manualTotal = (s.ca1_score || 0) + (s.ca2_score || 0) + (s.exam_score || 0) + extraTotal;
-      const effectiveTotal = (s.total || manualTotal || 0);
+      const effectiveTotal = Math.min(100, (s.ca1_score || 0) + (s.ca2_score || 0) + (s.exam_score || 0));
 
       return {
         ...s,

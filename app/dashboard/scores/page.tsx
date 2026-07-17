@@ -189,11 +189,9 @@ export default function ScoresPage() {
         const ca1 = field === 'ca1' ? num : (current.ca1 ?? 0);
         const ca2 = field === 'ca2' ? num : (current.ca2 ?? 0);
         const totalCA = ca1 + ca2;
-        const maxCA = maxCA1 + maxCA2;
-        
-        if (maxCA > 0) {
-          const targetWeeklySum = (totalCA / maxCA) * (maxWeekly * 10);
-          let remaining = targetWeeklySum;
+
+        const targetWeeklySum = totalCA;
+        let remaining = targetWeeklySum;
           
           // Distribute the target sum across 10 weeks as evenly as possible (steps of 0.5)
           for (let i = 1; i <= 10; i++) {
@@ -203,7 +201,6 @@ export default function ScoresPage() {
             current[`t${i}`] = val;
             remaining = parseFloat((remaining - val).toFixed(2));
           }
-        }
       }
 
       return { ...prev, [key]: current };
