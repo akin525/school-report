@@ -31,8 +31,8 @@ export async function GET(req: NextRequest) {
   const subjectInfoResult = await db.select().from(subjects).where(eq(subjects.id, subjectId)).limit(1);
   const subjectInfo = subjectInfoResult[0];
 
-  // Get all students in the class
-  const classStudents = await db.select({
+  // Get all students currently in class
+  const currentStudents = await db.select({
     id: students.id,
     first_name: students.first_name,
     middle_name: students.middle_name,
@@ -40,8 +40,32 @@ export async function GET(req: NextRequest) {
     admission_number: students.admission_number
   })
     .from(students)
-    .where(and(eq(students.class_id, classId), eq(students.school_id, schoolId || '')))
-    .orderBy(asc(students.last_name), asc(students.first_name));
+    .where(and(eq(students.class_id, classId), eq(students.school_id, schoolId || '')));
+
+  // Get all students who had scores in this class/session/subject
+  const historicalStudents = await db.selectDistinct({
+    id: students.id,
+    first_name: students.first_name,
+    middle_name: students.middle_name,
+    last_name: students.last_name,
+    admission_number: students.admission_number
+  })
+    .from(scores)
+    .innerJoin(students, eq(students.id, scores.student_id))
+    .where(and(
+      eq(scores.class_id, classId),
+      eq(scores.session_id, sessionId),
+      eq(scores.school_id, schoolId || '')
+    ));
+
+  // Merge and deduplicate
+  const studentMap = new Map();
+  [...currentStudents, ...historicalStudents].forEach(s => studentMap.set(s.id, s));
+  const classStudents = Array.from(studentMap.values()).sort((a, b) => {
+    const ln = (a.last_name || '').localeCompare(b.last_name || '');
+    if (ln !== 0) return ln;
+    return (a.first_name || '').localeCompare(b.first_name || '');
+  });
 
   // Get scores for the specific subject, class, and term
   const subjectScores = await db.select().from(scores).where(

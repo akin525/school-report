@@ -48,10 +48,41 @@ export async function GET(req: NextRequest) {
     .limit(1);
   const classTeacher = classTeacherResult[0];
 
-  // Get all students in class
-  const classStudents = await db.select().from(students)
-    .where(and(eq(students.class_id, classId), eq(students.school_id, schoolId || '')))
-    .orderBy(asc(students.last_name), asc(students.first_name));
+  // Get all students in class (either currently assigned or had scores in this class/session)
+  const currentStudents = await db.select().from(students)
+    .where(and(eq(students.class_id, classId), eq(students.school_id, schoolId || '')));
+
+  const historicalStudentsResult = await db.selectDistinct({
+    id: students.id,
+    school_id: students.school_id,
+    user_id: students.user_id,
+    first_name: students.first_name,
+    middle_name: students.middle_name,
+    last_name: students.last_name,
+    admission_number: students.admission_number,
+    photo_url: students.photo_url,
+    class_id: students.class_id,
+    gender: students.gender,
+    status: students.status
+  })
+    .from(scores)
+    .innerJoin(students, eq(students.id, scores.student_id))
+    .where(and(
+      eq(scores.class_id, classId),
+      eq(scores.session_id, sessionId),
+      eq(scores.school_id, schoolId || '')
+    ));
+
+  // Merge and deduplicate students
+  const studentMap = new Map();
+  [...currentStudents, ...historicalStudentsResult].forEach(s => {
+    studentMap.set(s.id, s);
+  });
+  const classStudents = Array.from(studentMap.values()).sort((a, b) => {
+    const ln = (a.last_name || '').localeCompare(b.last_name || '');
+    if (ln !== 0) return ln;
+    return (a.first_name || '').localeCompare(b.first_name || '');
+  });
 
   // Get all subjects that have scores for this class/term
   const subjectsWithScores = await db.selectDistinct({
@@ -87,8 +118,11 @@ export async function GET(req: NextRequest) {
     for (const subject of subjectsWithScores) {
       const score = allScores.find(s => s.student_id === student.id && s.subject_id === subject.id && Number(s.term) === term);
       if (score) {
-        const manualTotal = (score.ca1_score || 0) + (score.ca2_score || 0) + (score.exam_score || 0) +
-                           [score.t1, score.t2, score.t3, score.t4, score.t5, score.t6, score.t7, score.t8, score.t9, score.t10].reduce((acc, v) => acc + (v ? parseFloat(v as any) : 0), 0);
+        let extraTotal = 0;
+        [score.t1, score.t2, score.t3, score.t4, score.t5, score.t6, score.t7, score.t8, score.t9, score.t10].forEach(v => {
+          if (v) extraTotal += Number(v);
+        });
+        const manualTotal = (score.ca1_score || 0) + (score.ca2_score || 0) + (score.exam_score || 0) + extraTotal;
         const effectiveTotal = score.total || manualTotal || 0;
 
         studentScores[subject.id] = {

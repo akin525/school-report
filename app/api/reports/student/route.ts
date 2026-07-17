@@ -94,6 +94,10 @@ export async function GET(req: NextRequest) {
     ))
     .orderBy(asc(subjects.name));
 
+  // Determine the class the student was in for THIS session
+  // Use the class_id from scores if available, otherwise fallback to current class
+  const targetClassId = allScores.length > 0 ? allScores[0].class_id : (student.class_id || '');
+
   const termData: Record<number, any> = {};
 
   for (const term of [1, 2, 3]) {
@@ -112,7 +116,7 @@ export async function GET(req: NextRequest) {
     })
       .from(scores)
       .where(and(
-        eq(scores.class_id, student.class_id || ''),
+        eq(scores.class_id, targetClassId),
         eq(scores.session_id, sessionId),
         eq(scores.term, term),
         eq(scores.school_id, schoolId || '')
@@ -125,8 +129,11 @@ export async function GET(req: NextRequest) {
 
     for (const cs of classScores) {
       if (!subjectTotals[cs.subject_id]) subjectTotals[cs.subject_id] = [];
-      const manualTotal = (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0) +
-                         [cs.t1, cs.t2, cs.t3, cs.t4, cs.t5, cs.t6, cs.t7, cs.t8, cs.t9, cs.t10].reduce((acc, v) => acc + (v ? parseFloat(v as any) : 0), 0);
+      let extraTotal = 0;
+      [cs.t1, cs.t2, cs.t3, cs.t4, cs.t5, cs.t6, cs.t7, cs.t8, cs.t9, cs.t10].forEach(v => {
+        if (v) extraTotal += Number(v);
+      });
+      const manualTotal = (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0) + extraTotal;
       const effectiveTotal = cs.total || manualTotal || 0;
       subjectTotals[cs.subject_id].push(effectiveTotal);
     }
@@ -135,8 +142,11 @@ export async function GET(req: NextRequest) {
       const sorted = [...totals].sort((a, b) => b - a);
       const studentScore = classScores.find(cs => cs.student_id === studentId && cs.subject_id === subId);
       if (studentScore) {
-        const manualTotal = (studentScore.ca1_score || 0) + (studentScore.ca2_score || 0) + (studentScore.exam_score || 0) +
-                           [studentScore.t1, studentScore.t2, studentScore.t3, studentScore.t4, studentScore.t5, studentScore.t6, studentScore.t7, studentScore.t8, studentScore.t9, studentScore.t10].reduce((acc, v) => acc + (v ? parseFloat(v as any) : 0), 0);
+        let extraTotal = 0;
+        [studentScore.t1, studentScore.t2, studentScore.t3, studentScore.t4, studentScore.t5, studentScore.t6, studentScore.t7, studentScore.t8, studentScore.t9, studentScore.t10].forEach(v => {
+          if (v) extraTotal += Number(v);
+        });
+        const manualTotal = (studentScore.ca1_score || 0) + (studentScore.ca2_score || 0) + (studentScore.exam_score || 0) + extraTotal;
         const effectiveTotal = studentScore.total || manualTotal || 0;
         subjectPositions[subId] = sorted.indexOf(effectiveTotal) + 1;
       }
@@ -147,8 +157,11 @@ export async function GET(req: NextRequest) {
     // Class total scores for overall position
     const allStudentTotalsMap: Record<string, number> = {};
     classScores.forEach(cs => {
-      const manualTotal = (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0) +
-                         [cs.t1, cs.t2, cs.t3, cs.t4, cs.t5, cs.t6, cs.t7, cs.t8, cs.t9, cs.t10].reduce((acc, v) => acc + (v ? parseFloat(v as any) : 0), 0);
+      let extraTotal = 0;
+      [cs.t1, cs.t2, cs.t3, cs.t4, cs.t5, cs.t6, cs.t7, cs.t8, cs.t9, cs.t10].forEach(v => {
+        if (v) extraTotal += Number(v);
+      });
+      const manualTotal = (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0) + extraTotal;
       const effectiveTotal = cs.total || manualTotal || 0;
       allStudentTotalsMap[cs.student_id] = (allStudentTotalsMap[cs.student_id] || 0) + effectiveTotal;
     });
@@ -162,8 +175,11 @@ export async function GET(req: NextRequest) {
 
     // Map scores and ensure total is calculated if it's 0 but ca/exam exists
     const processedTermScores = termScores.map((s: any) => {
-      const manualTotal = (s.ca1_score || 0) + (s.ca2_score || 0) + (s.exam_score || 0) +
-                         [s.t1, s.t2, s.t3, s.t4, s.t5, s.t6, s.t7, s.t8, s.t9, s.t10].reduce((acc, v) => acc + (v ? parseFloat(v) : 0), 0);
+      let extraTotal = 0;
+      [s.t1, s.t2, s.t3, s.t4, s.t5, s.t6, s.t7, s.t8, s.t9, s.t10].forEach(v => {
+        if (v) extraTotal += Number(v);
+      });
+      const manualTotal = (s.ca1_score || 0) + (s.ca2_score || 0) + (s.exam_score || 0) + extraTotal;
       const effectiveTotal = (s.total || manualTotal || 0);
 
       return {

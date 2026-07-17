@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, hashPassword } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { students, classes, users } from '@/lib/schema';
-import { eq, and, or, like, asc, getTableColumns } from 'drizzle-orm';
+import { students, classes, users, scores } from '@/lib/schema';
+import { eq, and, or, like, asc, getTableColumns, inArray, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(req: NextRequest) {
@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const schoolId = searchParams.get('schoolId') || session.schoolId;
     const classId = searchParams.get('classId');
+    const sessionId = searchParams.get('sessionId');
     const category = searchParams.get('category');
     const search = searchParams.get('search');
     const status = searchParams.get('status') || 'active';
@@ -37,7 +38,33 @@ export async function GET(req: NextRequest) {
 
     const filters: any[] = [eq(students.school_id, schoolId || '')];
     if (status !== 'all') filters.push(eq(students.status, status as any));
-    if (classId) filters.push(eq(students.class_id, classId));
+
+    if (classId) {
+      if (sessionId) {
+        // If sessionId is provided, we want students who were in this class during that session
+        // (identified by having scores in that class/session) OR are currently in it.
+        const historicalStudentIdsResult = await db.selectDistinct({ id: scores.student_id })
+          .from(scores)
+          .where(and(
+            eq(scores.class_id, classId),
+            eq(scores.session_id, sessionId),
+            eq(scores.school_id, schoolId || '')
+          ));
+        const historicalIds = historicalStudentIdsResult.map(r => r.id);
+
+        if (historicalIds.length > 0) {
+          filters.push(or(
+            eq(students.class_id, classId),
+            inArray(students.id, historicalIds)
+          ));
+        } else {
+          filters.push(eq(students.class_id, classId));
+        }
+      } else {
+        filters.push(eq(students.class_id, classId));
+      }
+    }
+
     if (category) filters.push(eq(classes.category, category as any));
     if (search) {
       const s = `%${search}%`;

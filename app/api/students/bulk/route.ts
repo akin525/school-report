@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
         gender: student.gender || null,
         admission_year: student.admission_year || null,
         email: student.email || null,
-        status: 'active'
+        status: (student.status || 'active') as 'active' | 'graduated' | 'left' | 'suspended'
       }));
 
       if (values.length > 0) {

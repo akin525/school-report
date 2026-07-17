@@ -129,8 +129,8 @@ export default function ScoresPage() {
 
     setSubjects(subData.map((d: any) => ({ id: d.subject_id, name: d.subject_name })));
 
-    // Load students
-    const studRes = await fetch(`/api/students?classId=${selectedClass}&schoolId=${schoolId}`);
+    // Load students (passing sessionId to find students who were in this class during that session)
+    const studRes = await fetch(`/api/students?classId=${selectedClass}&schoolId=${schoolId}&sessionId=${selectedSession}`);
     const studData = await studRes.json();
     setStudents(studData);
 

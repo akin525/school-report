@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { teachers, teacherAssignments, students, teacherComments } from '@/lib/schema';
+import { teachers, teacherAssignments, students, teacherComments, scores } from '@/lib/schema';
 import { eq, and, isNull, inArray, asc, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -39,8 +39,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Get all students in the class
-  const classStudents = await db.select({
+  // Get all students currently in the class
+  const currentStudents = await db.select({
     id: students.id,
     first_name: students.first_name,
     middle_name: students.middle_name,
@@ -48,8 +48,32 @@ export async function GET(req: NextRequest) {
     admission_number: students.admission_number
   })
     .from(students)
-    .where(and(eq(students.class_id, classId), eq(students.school_id, schoolId || '')))
-    .orderBy(asc(students.first_name), asc(students.last_name));
+    .where(and(eq(students.class_id, classId), eq(students.school_id, schoolId || '')));
+
+  // Get all students who had scores or comments in this class/session
+  const historicalStudents = await db.selectDistinct({
+    id: students.id,
+    first_name: students.first_name,
+    middle_name: students.middle_name,
+    last_name: students.last_name,
+    admission_number: students.admission_number
+  })
+    .from(scores)
+    .innerJoin(students, eq(students.id, scores.student_id))
+    .where(and(
+      eq(scores.class_id, classId),
+      eq(scores.session_id, sessionId),
+      eq(scores.school_id, schoolId || '')
+    ));
+
+  // Merge and deduplicate
+  const studentMap = new Map();
+  [...currentStudents, ...historicalStudents].forEach(s => studentMap.set(s.id, s));
+  const classStudents = Array.from(studentMap.values()).sort((a, b) => {
+    const fn = (a.first_name || '').localeCompare(b.first_name || '');
+    if (fn !== 0) return fn;
+    return (a.last_name || '').localeCompare(b.last_name || '');
+  });
 
   if (classStudents.length === 0) {
     return NextResponse.json({ students: [], comments: [] });
@@ -108,10 +132,22 @@ export async function POST(req: NextRequest) {
         const { date, signature, nextTermStarts, coordinatorRemark, coordinatorSignature, coordinatorDate } = settings;
         const isTeacher = session.role === 'teacher';
         
-        // Get all students in this class to update their individual records
-        const classStudents = await tx.select({ id: students.id }).from(students).where(
+        // Get all students who were in this class during this session
+        const currentInClass = await tx.select({ id: students.id }).from(students).where(
           and(eq(students.class_id, classId), eq(students.school_id, schoolId || ''))
         );
+        const hadScoresInClass = await tx.selectDistinct({ id: students.id })
+          .from(scores)
+          .innerJoin(students, eq(students.id, scores.student_id))
+          .where(and(
+            eq(scores.class_id, classId),
+            eq(scores.session_id, sessionId),
+            eq(scores.school_id, schoolId || '')
+          ));
+
+        const studentMap = new Map();
+        [...currentInClass, ...hadScoresInClass].forEach(s => studentMap.set(s.id, s));
+        const classStudents = Array.from(studentMap.values());
 
         for (const student of classStudents) {
           const existingResult = await tx.select({ id: teacherComments.id }).from(teacherComments).where(
