@@ -114,21 +114,28 @@ export async function POST(req: NextRequest) {
     } = body;
     const sId = schoolId || session.schoolId;
 
-    if (!first_name || !last_name || !class_id || !gender) {
-      return NextResponse.json({ error: 'First name, last name, class and gender are required' }, { status: 400 });
+    if (!first_name || !last_name) {
+      return NextResponse.json({ error: 'First name and last name are required' }, { status: 400 });
     }
+
+    const clean = (val: any) => {
+      if (val === undefined || val === null) return null;
+      const s = String(val).trim();
+      return s === '' ? null : s;
+    };
 
     const id = uuidv4();
     let userId = null;
 
-    if (email && password) {
+    const cleanEmail = clean(email);
+    if (cleanEmail && password) {
       userId = uuidv4();
       const pwHash = await hashPassword(password);
       await db.insert(users).values({
         id: userId,
         school_id: sId,
         name: `${first_name} ${last_name}`,
-        email: email,
+        email: cleanEmail,
         password_hash: pwHash,
         role: 'student'
       });
@@ -137,27 +144,27 @@ export async function POST(req: NextRequest) {
     await db.insert(students).values({
       id,
       school_id: sId,
-      admission_number: admission_number || null,
-      hallmark_reg_no: hallmark_reg_no || null,
-      date_of_admission: date_of_admission ? new Date(date_of_admission) : null,
-      first_name,
-      middle_name: middle_name || null,
-      last_name,
-      class_id: class_id || null,
-      date_of_birth: date_of_birth || null,
-      gender: gender || null,
-      religion: religion || null,
-      home_address: home_address || null,
-      previous_school: previous_school || null,
-      state_of_origin: state_of_origin || null,
-      lga: lga || null,
-      bece_no: bece_no || null,
-      lin_no: lin_no || null,
-      photo_url: photo_url || null,
-      admission_year: admission_year || null,
-      status: status || 'active',
-      email: email || null,
-      phone: phone || null,
+      admission_number: clean(admission_number),
+      hallmark_reg_no: clean(hallmark_reg_no),
+      date_of_admission: clean(date_of_admission) ? new Date(date_of_admission) : null,
+      first_name: first_name.trim(),
+      middle_name: clean(middle_name),
+      last_name: last_name.trim(),
+      class_id: clean(class_id),
+      date_of_birth: clean(date_of_birth),
+      gender: clean(gender),
+      religion: clean(religion),
+      home_address: clean(home_address),
+      previous_school: clean(previous_school),
+      state_of_origin: clean(state_of_origin),
+      lga: clean(lga),
+      bece_no: clean(bece_no),
+      lin_no: clean(lin_no),
+      photo_url: clean(photo_url),
+      admission_year: clean(admission_year),
+      status: (clean(status) || 'active') as any,
+      email: cleanEmail,
+      phone: clean(phone),
       user_id: userId
     });
 
@@ -183,24 +190,34 @@ export async function PUT(req: NextRequest) {
       previous_school, state_of_origin, lga, bece_no, lin_no
     } = body;
 
-    if (!first_name || !last_name || !class_id || !gender) {
-      return NextResponse.json({ error: 'First name, last name, class and gender are required' }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: 'Student ID is required' }, { status: 400 });
+    }
+
+    if (!first_name || !last_name) {
+      return NextResponse.json({ error: 'First name and last name are required' }, { status: 400 });
     }
 
     const studentResult = await db.select().from(students).where(eq(students.id, id)).limit(1);
     const student = studentResult[0];
     if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 });
 
-    let userId = student.user_id;
+    // Robust utility to ensure empty strings are converted to NULL
+    const clean = (val: any) => {
+      if (val === undefined || val === null) return null;
+      const s = String(val).trim();
+      return s === '' ? null : s;
+    };
 
-    if (email) {
+    let userId = clean(student.user_id);
+    const cleanEmail = clean(email);
+
+    if (cleanEmail) {
       if (userId) {
         // Update user
-        const updateData: any = { email, name: `${first_name} ${last_name}` };
-        if (password) {
-          updateData.password_hash = await hashPassword(password);
-        }
-        await db.update(users).set(updateData).where(eq(users.id, userId));
+        const userUpdate: any = { email: cleanEmail, name: `${first_name} ${last_name}` };
+        if (password) userUpdate.password_hash = await hashPassword(password);
+        await db.update(users).set(userUpdate).where(eq(users.id, userId));
       } else if (password) {
         // Create user
         userId = uuidv4();
@@ -209,37 +226,55 @@ export async function PUT(req: NextRequest) {
           id: userId,
           school_id: student.school_id,
           name: `${first_name} ${last_name}`,
-          email: email,
+          email: cleanEmail,
           password_hash: pwHash,
           role: 'student'
         });
       }
     }
 
-    await db.update(students).set({
-      first_name,
-      middle_name: middle_name || null,
-      last_name,
-      class_id: class_id || null,
-      date_of_birth: date_of_birth || null,
-      gender: gender || null,
-      admission_number: admission_number || null,
-      hallmark_reg_no: hallmark_reg_no || null,
-      date_of_admission: date_of_admission ? new Date(date_of_admission) : null,
-      religion: religion || null,
-      home_address: home_address || null,
-      previous_school: previous_school || null,
-      state_of_origin: state_of_origin || null,
-      lga: lga || null,
-      bece_no: bece_no || null,
-      lin_no: lin_no || null,
-      admission_year: admission_year || null,
-      status: status || 'active',
-      photo_url: photo_url || null,
-      email: email || null,
-      phone: phone || null,
+    const updateData: any = {
+      first_name: first_name.trim(),
+      last_name: last_name.trim(),
+      status: (clean(status) || 'active'),
       user_id: userId
-    }).where(eq(students.id, id));
+    };
+
+    // Only include these if they are not undefined in the body
+    // This makes the update more flexible
+    if (middle_name !== undefined) updateData.middle_name = clean(middle_name);
+    if (class_id !== undefined) updateData.class_id = clean(class_id);
+    if (date_of_birth !== undefined) updateData.date_of_birth = clean(date_of_birth);
+    if (gender !== undefined) updateData.gender = clean(gender);
+    if (religion !== undefined) updateData.religion = clean(religion);
+    if (home_address !== undefined) updateData.home_address = clean(home_address);
+    if (previous_school !== undefined) updateData.previous_school = clean(previous_school);
+    if (state_of_origin !== undefined) updateData.state_of_origin = clean(state_of_origin);
+    if (lga !== undefined) updateData.lga = clean(lga);
+    if (bece_no !== undefined) updateData.bece_no = clean(bece_no);
+    if (lin_no !== undefined) updateData.lin_no = clean(lin_no);
+    if (photo_url !== undefined) updateData.photo_url = clean(photo_url);
+    if (admission_year !== undefined) updateData.admission_year = clean(admission_year);
+    if (email !== undefined) updateData.email = cleanEmail;
+    if (phone !== undefined) updateData.phone = clean(phone);
+
+    // Special handling for Unique fields to avoid conflicts with empty strings in DB
+    if (admission_number !== undefined) {
+      const val = clean(admission_number);
+      if (val !== student.admission_number) updateData.admission_number = val;
+    }
+    if (hallmark_reg_no !== undefined) {
+      const val = clean(hallmark_reg_no);
+      if (val !== student.hallmark_reg_no) updateData.hallmark_reg_no = val;
+    }
+
+    // Safe Date handling
+    if (date_of_admission !== undefined) {
+      const d = clean(date_of_admission);
+      updateData.date_of_admission = d ? new Date(d) : null;
+    }
+
+    await db.update(students).set(updateData).where(eq(students.id, id));
 
     const updatedStudentResult = await db.select().from(students).where(eq(students.id, id)).limit(1);
     return NextResponse.json(updatedStudentResult[0]);
