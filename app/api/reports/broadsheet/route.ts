@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { calculateGrade } from '@/lib/grading';
 import { db } from '@/lib/db';
-import { classes, schools, sessions, gradingSystem, teacherAssignments, teachers, students, scores, subjects } from '@/lib/schema';
+import { classes, schools, sessions, gradingSystem, teacherAssignments, teachers, students, scores, subjects, classSubjects } from '@/lib/schema';
 import { eq, and, isNull, desc, asc, inArray, sql } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
       if (score) {
         // Treat subjects with absolutely no marks (all null or all 0) as not taken
         const scoreComponents = [score.ca1_score, score.ca2_score, score.exam_score, score.t1, score.t2, score.t3, score.t4, score.t5, score.t6, score.t7, score.t8, score.t9, score.t10];
-        const hasMarks = scoreComponents.some(v => v !== null && v !== 0 && v !== '' && v !== undefined);
+        const hasMarks = scoreComponents.some(v => v !== null && v !== 0 && (v as any) !== '' && v !== undefined);
 
         if (!hasMarks) {
           studentScores[subject.id] = null;
@@ -149,8 +149,7 @@ export async function GET(req: NextRequest) {
         }
 
         // Recalculate total solely based on CA summary and Exam to ensure consistency and fix old buggy data
-        const manualSum = [score.t1, score.t2, score.t3, score.t4, score.t5, score.t6, score.t7, score.t8, score.t9, score.t10].reduce((acc, v) => acc + (v ? parseFloat(v as any) : 0), 0);
-        const effectiveTotal = Math.min(100, (score.ca1_score || 0) + (score.ca2_score || 0) + (score.exam_score || 0) + manualSum);
+        const effectiveTotal = Math.min(100, (score.ca1_score || 0) + (score.ca2_score || 0) + (score.exam_score || 0));
 
         studentScores[subject.id] = {
           ca: (score.ca1_score || 0) + (score.ca2_score || 0),

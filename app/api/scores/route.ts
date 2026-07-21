@@ -82,7 +82,12 @@ export async function POST(req: NextRequest) {
     t8: (t8 === '' || t8 === undefined) ? null : t8,
     t9: (t9 === '' || t9 === undefined) ? null : t9,
     t10: (t10 === '' || t10 === undefined) ? null : t10,
-    total: Math.min(100, Math.max((ca1_score ?? 0) + (ca2_score ?? 0), [t1, t2, t3, t4, t5, t6, t7, t8, t9, t10].reduce((acc: number, val: any) => acc + (val ? Number(val) : 0), 0)) + (exam_score ?? 0)),
+    total: (() => {
+      let extraTotal = 0;
+      [t1, t2, t3, t4, t5, t6, t7, t8, t9, t10].forEach(v => { if (v) extraTotal += Number(v); });
+      const caTotal = Math.max((ca1_score ?? 0) + (ca2_score ?? 0), extraTotal);
+      return Math.min(100, caTotal + (exam_score ?? 0));
+    })(),
     updated_at: new Date()
   };
 
@@ -140,7 +145,12 @@ export async function PUT(req: NextRequest) {
         t8: (sc.t8 === '' || sc.t8 === undefined) ? null : sc.t8,
         t9: (sc.t9 === '' || sc.t9 === undefined) ? null : sc.t9,
         t10: (sc.t10 === '' || sc.t10 === undefined) ? null : sc.t10,
-        total: Math.min(100, Math.max((sc.ca1_score ?? 0) + (sc.ca2_score ?? 0), [sc.t1, sc.t2, sc.t3, sc.t4, sc.t5, sc.t6, sc.t7, sc.t8, sc.t9, sc.t10].reduce((acc: number, val: any) => acc + (val ? Number(val) : 0), 0)) + (sc.exam_score ?? 0)),
+        total: (() => {
+          let extraTotal = 0;
+          [sc.t1, sc.t2, sc.t3, sc.t4, sc.t5, sc.t6, sc.t7, sc.t8, sc.t9, sc.t10].forEach(v => { if (v) extraTotal += Number(v); });
+          const caTotal = Math.max((sc.ca1_score ?? 0) + (sc.ca2_score || 0), extraTotal);
+          return Math.min(100, caTotal + (sc.exam_score ?? 0));
+        })(),
         updated_at: new Date()
       };
 
