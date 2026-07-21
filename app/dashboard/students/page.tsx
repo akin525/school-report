@@ -137,7 +137,7 @@ export default function StudentsPage() {
 
         if (res.ok) {
           const { url } = await res.json();
-          setForm({ ...form, photo_url: url });
+          setForm(prev => ({ ...prev, photo_url: url }));
         } else {
           alert('Upload failed');
         }
@@ -452,6 +452,24 @@ export default function StudentsPage() {
              </div>
              <div className="p-6 space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                   <div className="col-span-2 flex items-center gap-4 bg-gray-50 p-4 rounded-lg">
+                      <div className="relative w-16 h-16 rounded-full border-2 border-gray-200 overflow-hidden bg-white flex items-center justify-center">
+                         {form.photo_url ? (
+                            <img src={form.photo_url} className="w-full h-full object-cover" alt="Student" />
+                         ) : (
+                            <span className="text-2xl text-gray-300">👤</span>
+                         )}
+                         {uploading && <div className="absolute inset-0 bg-black/20 flex items-center justify-center"><div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>}
+                      </div>
+                      <div className="flex-1">
+                         <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Student Photo</label>
+                         <input type="file" accept="image/*" className="text-xs w-full" onChange={handleFileUpload} disabled={uploading} />
+                         <p className="text-[10px] text-gray-400 mt-1">PNG, JPG or WebP.</p>
+                      </div>
+                      {form.photo_url && (
+                        <button onClick={() => setForm({...form, photo_url: ''})} className="text-xs text-red-600 hover:underline">Remove</button>
+                      )}
+                   </div>
                    <div>
                       <label className="text-xs font-bold text-gray-500 uppercase">Surname *</label>
                       <input className="input w-full" placeholder="Surname" value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value})} />
