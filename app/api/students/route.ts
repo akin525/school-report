@@ -118,10 +118,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'First name and last name are required' }, { status: 400 });
     }
 
-    const clean = (val: any) => {
-      if (val === undefined || val === null) return null;
+    const clean = (val: any, useEmptyString = false) => {
+      if (val === undefined || val === null) return useEmptyString ? '' : null;
       const s = String(val).trim();
-      return s === '' ? null : s;
+      return s === '' ? (useEmptyString ? '' : null) : s;
     };
 
     const id = uuidv4();
@@ -148,23 +148,23 @@ export async function POST(req: NextRequest) {
       hallmark_reg_no: clean(hallmark_reg_no),
       date_of_admission: clean(date_of_admission) ? new Date(date_of_admission) : null,
       first_name: first_name.trim(),
-      middle_name: clean(middle_name),
+      middle_name: clean(middle_name, true),
       last_name: last_name.trim(),
       class_id: clean(class_id),
-      date_of_birth: clean(date_of_birth),
-      gender: clean(gender),
-      religion: clean(religion),
-      home_address: clean(home_address),
-      previous_school: clean(previous_school),
-      state_of_origin: clean(state_of_origin),
-      lga: clean(lga),
-      bece_no: clean(bece_no),
-      lin_no: clean(lin_no),
+      date_of_birth: clean(date_of_birth, true),
+      gender: clean(gender, true),
+      religion: clean(religion, true),
+      home_address: clean(home_address, true),
+      previous_school: clean(previous_school, true),
+      state_of_origin: clean(state_of_origin, true),
+      lga: clean(lga, true),
+      bece_no: clean(bece_no, true),
+      lin_no: clean(lin_no, true),
       photo_url: clean(photo_url),
-      admission_year: clean(admission_year),
+      admission_year: clean(admission_year, true),
       status: (clean(status) || 'active') as any,
-      email: cleanEmail,
-      phone: clean(phone),
+      email: cleanEmail || '',
+      phone: clean(phone, true),
       user_id: userId
     });
 
@@ -203,10 +203,11 @@ export async function PUT(req: NextRequest) {
     if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 });
 
     // Robust utility to ensure empty strings are converted to NULL
-    const clean = (val: any) => {
-      if (val === undefined || val === null) return null;
+    // Fallback to empty string for fields that might be NOT NULL in user's DB
+    const clean = (val: any, useEmptyString = false) => {
+      if (val === undefined || val === null) return useEmptyString ? '' : null;
       const s = String(val).trim();
-      return s === '' ? null : s;
+      return s === '' ? (useEmptyString ? '' : null) : s;
     };
 
     let userId = clean(student.user_id);
@@ -237,28 +238,26 @@ export async function PUT(req: NextRequest) {
       first_name: first_name.trim(),
       last_name: last_name.trim(),
       status: (clean(status) || 'active'),
-      user_id: userId
+      user_id: userId,
+      // Use empty strings for these to avoid "cannot be null" errors in older DB schemas
+      phone: clean(phone, true),
+      email: clean(email, true),
+      religion: clean(religion, true),
+      home_address: clean(home_address, true),
+      previous_school: clean(previous_school, true),
+      state_of_origin: clean(state_of_origin, true),
+      lga: clean(lga, true),
+      bece_no: clean(bece_no, true),
+      lin_no: clean(lin_no, true),
+      admission_year: clean(admission_year, true),
     };
 
-    // Only include these if they are not undefined in the body
-    // This makes the update more flexible
-    if (middle_name !== undefined) updateData.middle_name = clean(middle_name);
     if (class_id !== undefined) updateData.class_id = clean(class_id);
     if (date_of_birth !== undefined) updateData.date_of_birth = clean(date_of_birth);
     if (gender !== undefined) updateData.gender = clean(gender);
-    if (religion !== undefined) updateData.religion = clean(religion);
-    if (home_address !== undefined) updateData.home_address = clean(home_address);
-    if (previous_school !== undefined) updateData.previous_school = clean(previous_school);
-    if (state_of_origin !== undefined) updateData.state_of_origin = clean(state_of_origin);
-    if (lga !== undefined) updateData.lga = clean(lga);
-    if (bece_no !== undefined) updateData.bece_no = clean(bece_no);
-    if (lin_no !== undefined) updateData.lin_no = clean(lin_no);
     if (photo_url !== undefined) updateData.photo_url = clean(photo_url);
-    if (admission_year !== undefined) updateData.admission_year = clean(admission_year);
-    if (email !== undefined) updateData.email = cleanEmail;
-    if (phone !== undefined) updateData.phone = clean(phone);
 
-    // Special handling for Unique fields to avoid conflicts with empty strings in DB
+    // Keep admission_number as NULL if empty to avoid unique constraint conflicts
     if (admission_number !== undefined) {
       const val = clean(admission_number);
       if (val !== student.admission_number) updateData.admission_number = val;

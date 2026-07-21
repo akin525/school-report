@@ -421,7 +421,22 @@ export default function StudentsPage() {
                 {filtered.map((s, i) => (
                   <tr key={s.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => viewDetails(s)}>
                     <td className="p-4">
-                      {s.photo_url ? <img src={s.photo_url} className="w-10 h-10 rounded-full object-cover" /> : '—'}
+                      {s.photo_url ? (
+                        <div className="w-10 h-10 rounded-full border border-gray-200 overflow-hidden bg-gray-50 flex items-center justify-center">
+                           <img
+                              src={s.photo_url}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as any).onerror = null;
+                                (e.target as any).src = "https://ui-avatars.com/api/?name=" + encodeURIComponent(s.first_name + " " + s.last_name) + "&background=random";
+                              }}
+                           />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-xs">
+                           No Pic
+                        </div>
+                      )}
                     </td>
                     <td className="p-4 font-mono">{s.admission_number || '—'}</td>
                     <td className="p-4 font-medium">{s.last_name}, {s.first_name}</td>
@@ -569,8 +584,27 @@ export default function StudentsPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl">
              <div className="bg-blue-800 p-6 text-white flex justify-between items-center">
-                <h2 className="text-xl font-bold">Student Details</h2>
-                <button onClick={() => setShowDetailsModal(false)} className="text-3xl">&times;</button>
+                <div className="flex items-center gap-4">
+                   <div className="w-16 h-16 rounded-full border-2 border-white/20 overflow-hidden bg-white/10 flex items-center justify-center">
+                      {selectedStudent.photo_url ? (
+                        <img
+                          src={selectedStudent.photo_url}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as any).onerror = null;
+                            (e.target as any).src = "https://ui-avatars.com/api/?name=" + encodeURIComponent(selectedStudent.first_name + " " + selectedStudent.last_name) + "&background=random";
+                          }}
+                        />
+                      ) : (
+                        <span className="text-3xl">👤</span>
+                      )}
+                   </div>
+                   <div>
+                      <h2 className="text-xl font-bold">{selectedStudent.last_name}, {selectedStudent.first_name}</h2>
+                      <p className="text-blue-200 text-xs uppercase font-bold tracking-wider">{selectedStudent.admission_number || 'No Adm No.'}</p>
+                   </div>
+                </div>
+                <button onClick={() => setShowDetailsModal(false)} className="text-3xl hover:text-red-400 transition-colors">&times;</button>
              </div>
              <div className="p-8 grid grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto">
                 <DetailRow label="Name" value={selectedStudent.last_name + ", " + selectedStudent.first_name} />
