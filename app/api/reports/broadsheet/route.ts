@@ -87,24 +87,41 @@ export async function GET(req: NextRequest) {
     return (a.first_name || '').localeCompare(b.first_name || '');
   });
 
-  // Get all subjects that have scores for this class/term
-  const subjectsWithScores = await db.selectDistinct({
+  // Get all subjects for this class from class_subjects table
+  const subjectsInClass = await db.select({
     id: subjects.id,
     name: subjects.name,
     category: subjects.category
   })
-    .from(scores)
-    .innerJoin(subjects, eq(subjects.id, scores.subject_id))
+    .from(classSubjects)
+    .innerJoin(subjects, eq(subjects.id, classSubjects.subject_id))
     .where(and(
-      eq(scores.class_id, classId),
-      eq(scores.session_id, sessionId),
-      eq(scores.term, term),
-      eq(scores.school_id, schoolId || '')
+      eq(classSubjects.class_id, classId),
+      eq(classSubjects.school_id, schoolId || '')
     ))
     .orderBy(asc(subjects.name));
 
-  // Get all scores
-  const allScores = await db.select().from(scores)
+  // If no subjects assigned to class, fallback to subjects that have scores (legacy/backup)
+  let finalSubjects = subjectsInClass;
+  if (finalSubjects.length === 0) {
+    finalSubjects = await db.selectDistinct({
+      id: subjects.id,
+      name: subjects.name,
+      category: subjects.category
+    })
+      .from(scores)
+      .innerJoin(subjects, eq(subjects.id, scores.subject_id))
+      .where(and(
+        eq(scores.class_id, classId),
+        eq(scores.session_id, sessionId),
+        eq(scores.term, term),
+        eq(scores.school_id, schoolId || '')
+      ))
+      .orderBy(asc(subjects.name));
+  }
+
+  // Get all scores for the specific term
+  const termScores = await db.select().from(scores)
     .where(and(
       eq(scores.class_id, classId),
       eq(scores.session_id, sessionId),
@@ -118,11 +135,22 @@ export async function GET(req: NextRequest) {
     let grandTotal = 0;
     let subjectCount = 0;
 
-    for (const subject of subjectsWithScores) {
-      const score = allScores.find(s => s.student_id === student.id && s.subject_id === subject.id && Number(s.term) === term);
+    for (const subject of finalSubjects) {
+      const score = termScores.find(s => s.student_id === student.id && s.subject_id === subject.id);
+
       if (score) {
+        // Treat subjects with absolutely no marks (all null or all 0) as not taken
+        const scoreComponents = [score.ca1_score, score.ca2_score, score.exam_score, score.t1, score.t2, score.t3, score.t4, score.t5, score.t6, score.t7, score.t8, score.t9, score.t10];
+        const hasMarks = scoreComponents.some(v => v !== null && v !== 0 && v !== '' && v !== undefined);
+
+        if (!hasMarks) {
+          studentScores[subject.id] = null;
+          continue;
+        }
+
         // Recalculate total solely based on CA summary and Exam to ensure consistency and fix old buggy data
-        const effectiveTotal = Math.min(100, (score.ca1_score || 0) + (score.ca2_score || 0) + (score.exam_score || 0));
+        const manualSum = [score.t1, score.t2, score.t3, score.t4, score.t5, score.t6, score.t7, score.t8, score.t9, score.t10].reduce((acc, v) => acc + (v ? parseFloat(v as any) : 0), 0);
+        const effectiveTotal = Math.min(100, (score.ca1_score || 0) + (score.ca2_score || 0) + (score.exam_score || 0) + manualSum);
 
         studentScores[subject.id] = {
           ca: (score.ca1_score || 0) + (score.ca2_score || 0),
@@ -156,7 +184,7 @@ export async function GET(req: NextRequest) {
   }));
 
   // Calculate subject positions
-  for (const subject of subjectsWithScores) {
+  for (const subject of finalSubjects) {
     const subjectScores = broadsheet
       .filter(r => r.scores[subject.id] !== null)
       .sort((a, b) => (b.scores[subject.id]?.total || 0) - (a.scores[subject.id]?.total || 0));
@@ -179,7 +207,7 @@ export async function GET(req: NextRequest) {
     class: classInfo,
     classTeacher: classTeacher || null,
     term,
-    subjects: subjectsWithScores,
+    subjects: finalSubjects,
     broadsheet,
     classSize: classStudents.length,
   });

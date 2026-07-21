@@ -133,7 +133,9 @@ export async function GET(req: NextRequest) {
     for (const cs of classScores) {
       if (!subjectTotals[cs.subject_id]) subjectTotals[cs.subject_id] = [];
       // Recalculate total solely based on CA summary and Exam to ensure consistency and fix old buggy data
-      const effectiveTotal = Math.min(100, (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0));
+      const caSum = (Number(cs.ca1_score) || 0) + (Number(cs.ca2_score) || 0);
+      const testSum = [cs.t1, cs.t2, cs.t3, cs.t4, cs.t5, cs.t6, cs.t7, cs.t8, cs.t9, cs.t10].reduce((acc, v) => acc + (Number(v) || 0), 0);
+      const effectiveTotal = Math.min(100, Math.max(caSum, testSum) + (Number(cs.exam_score) || 0));
       subjectTotals[cs.subject_id].push(effectiveTotal);
     }
 
@@ -141,7 +143,9 @@ export async function GET(req: NextRequest) {
       const sorted = [...totals].sort((a, b) => b - a);
       const studentScore = classScores.find(cs => cs.student_id === studentId && cs.subject_id === subId);
       if (studentScore) {
-        const effectiveTotal = Math.min(100, (studentScore.ca1_score || 0) + (studentScore.ca2_score || 0) + (studentScore.exam_score || 0));
+        const caSum = (Number(studentScore.ca1_score) || 0) + (Number(studentScore.ca2_score) || 0);
+        const testSum = [studentScore.t1, studentScore.t2, studentScore.t3, studentScore.t4, studentScore.t5, studentScore.t6, studentScore.t7, studentScore.t8, studentScore.t9, studentScore.t10].reduce((acc, v) => acc + (Number(v) || 0), 0);
+        const effectiveTotal = Math.min(100, Math.max(caSum, testSum) + (Number(studentScore.exam_score) || 0));
         subjectPositions[subId] = sorted.indexOf(effectiveTotal) + 1;
       }
       const sum = totals.reduce((a, b) => a + b, 0);
@@ -151,7 +155,9 @@ export async function GET(req: NextRequest) {
     // Class total scores for overall position
     const allStudentTotalsMap: Record<string, number> = {};
     classScores.forEach(cs => {
-      const effectiveTotal = Math.min(100, (cs.ca1_score || 0) + (cs.ca2_score || 0) + (cs.exam_score || 0));
+      const caSum = (Number(cs.ca1_score) || 0) + (Number(cs.ca2_score) || 0);
+      const testSum = [cs.t1, cs.t2, cs.t3, cs.t4, cs.t5, cs.t6, cs.t7, cs.t8, cs.t9, cs.t10].reduce((acc, v) => acc + (Number(v) || 0), 0);
+      const effectiveTotal = Math.min(100, Math.max(caSum, testSum) + (Number(cs.exam_score) || 0));
       allStudentTotalsMap[cs.student_id] = (allStudentTotalsMap[cs.student_id] || 0) + effectiveTotal;
     });
 
@@ -164,6 +170,24 @@ export async function GET(req: NextRequest) {
 
     // Map scores and ensure total is calculated if it's 0 but ca/exam exists
     const processedTermScores = termScores.map((s: any) => {
+      // Treat subjects with absolutely no marks (all null or all 0) as not taken
+      const scoreComponents = [s.ca1_score, s.ca2_score, s.exam_score, s.t1, s.t2, s.t3, s.t4, s.t5, s.t6, s.t7, s.t8, s.t9, s.t10];
+      const hasMarks = scoreComponents.some(v => v !== null && v !== 0 && v !== '' && v !== undefined);
+
+      if (!hasMarks) {
+        return {
+          ...s,
+          total: null,
+          grade: '',
+          position: null,
+          class_average: null,
+          classSize: classSize || 1,
+        };
+      }
+
+      // Recalculate total solely based on CA summary and Exam to ensure consistency and fix old buggy data
+      const manualSum = [s.t1, s.t2, s.t3, s.t4, s.t5, s.t6, s.t7, s.t8, s.t9, s.t10].reduce((acc, v) => acc + (v ? parseFloat(v) : 0), 0);
+//       const effectiveTotal = Math.min(100, (s.ca1_score || 0) + (s.ca2_score || 0) + (s.exam_score || 0) + manualSum);
       const effectiveTotal = Math.min(100, (s.ca1_score || 0) + (s.ca2_score || 0) + (s.exam_score || 0));
 
       return {
@@ -176,16 +200,16 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    const studentTotalAdjusted = processedTermScores.length > 0 ? processedTermScores.reduce((sum, s) => sum + (s.total || 0), 0) : studentTotal;
-    const subjectsTaken = processedTermScores.length;
+    const studentTotalAdjusted = processedTermScores.reduce((sum, s) => sum + (Number(s.total) || 0), 0);
+    const subjectsTaken = processedTermScores.filter(s => s.total !== null).length;
     const maxScorePossible = subjectsTaken * 100;
     const overallPercentage = maxScorePossible > 0 ? Math.round((studentTotalAdjusted / maxScorePossible) * 100) : 0;
 
     termData[term] = {
       scores: processedTermScores,
-      total: studentTotalAdjusted,
-      overallPercentage,
-      overallPosition,
+      total: subjectsTaken > 0 ? studentTotalAdjusted : 0,
+      overallPercentage: subjectsTaken > 0 ? overallPercentage : 0,
+      overallPosition: subjectsTaken > 0 ? overallPosition : 0,
       classSize: classSize || 1,
     };
   }
@@ -227,17 +251,20 @@ export async function GET(req: NextRequest) {
     const t2 = termData[2]?.scores.find((s: any) => s.subject_id === sub.id);
     const t3 = termData[3]?.scores.find((s: any) => s.subject_id === sub.id);
 
-    const validTerms12 = [t1, t2].filter(t => t);
+    // Filter terms where the subject was actually taken (total is not null)
+    const validTerms12 = [t1, t2].filter(t => t && t.total !== null);
     const cum12Total = validTerms12.reduce((sum, t) => sum + (t?.total || 0), 0);
     const cum12Ave = validTerms12.length > 0 ? cum12Total / validTerms12.length : 0;
     const cum12Grade = validTerms12.length > 0 ? calculateGrade(cum12Ave, 100, grading).grade : '';
     const class12Ave = validTerms12.length > 0 ? validTerms12.reduce((sum, t) => sum + (t?.class_average || 0), 0) / validTerms12.length : 0;
 
-    const validTermsFinal = [t1, t2, t3].filter(t => t);
+    const validTermsFinal = [t1, t2, t3].filter(t => t && t.total !== null);
     const cumFinalTotal = validTermsFinal.reduce((sum, t) => sum + (t?.total || 0), 0);
     const cumFinalAve = validTermsFinal.length > 0 ? cumFinalTotal / validTermsFinal.length : 0;
     const cumFinalGrade = validTermsFinal.length > 0 ? calculateGrade(cumFinalAve, 100, grading).grade : '';
     const classFinalAve = validTermsFinal.length > 0 ? validTermsFinal.reduce((sum, t) => sum + (t?.class_average || 0), 0) / validTermsFinal.length : 0;
+
+    const hasAnyValidTerm = validTermsFinal.length > 0;
 
     return {
       subjectId: sub.id,
@@ -245,14 +272,14 @@ export async function GET(req: NextRequest) {
       term1: t1 || null,
       term2: t2 || null,
       term3: t3 || null,
-      cum12Total,
-      cum12Ave: Math.round(cum12Ave * 10) / 10,
-      cum12Grade,
-      class12Ave: Math.round(class12Ave * 10) / 10,
-      cumTotal: cumFinalTotal,
-      cumAve: Math.round(cumFinalAve * 10) / 10,
-      cumGrade: cumFinalGrade,
-      classFinalAve: Math.round(classFinalAve * 10) / 10,
+      cum12Total: validTerms12.length > 0 ? cum12Total : null,
+      cum12Ave: validTerms12.length > 0 ? Math.round(cum12Ave * 10) / 10 : null,
+      cum12Grade: validTerms12.length > 0 ? cum12Grade : '',
+      class12Ave: validTerms12.length > 0 ? Math.round(class12Ave * 10) / 10 : null,
+      cumTotal: hasAnyValidTerm ? cumFinalTotal : null,
+      cumAve: hasAnyValidTerm ? Math.round(cumFinalAve * 10) / 10 : null,
+      cumGrade: hasAnyValidTerm ? cumFinalGrade : '',
+      classFinalAve: hasAnyValidTerm ? Math.round(classFinalAve * 10) / 10 : null,
     };
   });
 
