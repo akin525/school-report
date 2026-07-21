@@ -124,11 +124,15 @@ export default function StudentsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploading(true);
-    try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64String = reader.result as string;
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64String = reader.result as string;
+
+      // Show local preview immediately so the user sees it instantly
+      setForm(prev => ({ ...prev, photo_url: base64String }));
+
+      setUploading(true);
+      try {
         const res = await fetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -137,18 +141,19 @@ export default function StudentsPage() {
 
         if (res.ok) {
           const { url } = await res.json();
+          // Update with the actual server URL once saved
           setForm(prev => ({ ...prev, photo_url: url }));
         } else {
           alert('Upload failed');
         }
+      } catch (error) {
+        console.error('Upload error:', error);
+        alert('Upload error');
+      } finally {
         setUploading(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Upload error:', error);
-      alert('Upload error');
-      setUploading(false);
-    }
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const saveStudent = async () => {
@@ -422,19 +427,27 @@ export default function StudentsPage() {
                   <tr key={s.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => viewDetails(s)}>
                     <td className="p-4">
                       {s.photo_url ? (
-                        <div className="w-10 h-10 rounded-full border border-gray-200 overflow-hidden bg-gray-50 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full border border-gray-200 overflow-hidden bg-gray-50 flex items-center justify-center shadow-sm">
                            <img
-                              src={s.photo_url}
+                              src={s.photo_url + "?v=" + s.id}
                               className="w-full h-full object-cover"
+                              loading="lazy"
                               onError={(e) => {
-                                (e.target as any).onerror = null;
-                                (e.target as any).src = "https://ui-avatars.com/api/?name=" + encodeURIComponent(s.first_name + " " + s.last_name) + "&background=random";
+                                const target = e.target as HTMLImageElement;
+                                if (target.src.includes('ui-avatars.com')) return;
+                                target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(s.first_name + " " + s.last_name)}&background=random&color=fff&size=128`;
                               }}
                            />
                         </div>
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-xs">
-                           No Pic
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm"
+                          style={{
+                            background: `linear-gradient(135deg, #6366f1 0%, #a855f7 100%)`,
+                            textShadow: '0 1px 1px rgba(0,0,0,0.1)'
+                          }}
+                        >
+                           {s.first_name?.[0]}{s.last_name?.[0]}
                         </div>
                       )}
                     </td>
@@ -468,21 +481,31 @@ export default function StudentsPage() {
              <div className="p-6 space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="col-span-2 flex items-center gap-4 bg-gray-50 p-4 rounded-lg">
-                      <div className="relative w-16 h-16 rounded-full border-2 border-gray-200 overflow-hidden bg-white flex items-center justify-center">
+                      <div className="relative w-20 h-20 rounded-lg border-2 border-gray-200 overflow-hidden bg-white flex items-center justify-center shadow-sm">
                          {form.photo_url ? (
-                            <img src={form.photo_url} className="w-full h-full object-cover" alt="Student" />
+                            <img src={form.photo_url} className="w-full h-full object-cover" alt="" />
                          ) : (
-                            <span className="text-2xl text-gray-300">👤</span>
+                            <span className="text-3xl text-gray-300">👤</span>
                          )}
-                         {uploading && <div className="absolute inset-0 bg-black/20 flex items-center justify-center"><div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>}
+                         {uploading && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div></div>}
                       </div>
                       <div className="flex-1">
                          <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Student Photo</label>
-                         <input type="file" accept="image/*" className="text-xs w-full" onChange={handleFileUpload} disabled={uploading} />
-                         <p className="text-[10px] text-gray-400 mt-1">PNG, JPG or WebP.</p>
+                         <div className="flex flex-col gap-2">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                              onChange={handleFileUpload}
+                              disabled={uploading}
+                            />
+                            <p className="text-[10px] text-gray-400">Recommended: Square image, PNG or JPG.</p>
+                         </div>
                       </div>
                       {form.photo_url && (
-                        <button onClick={() => setForm({...form, photo_url: ''})} className="text-xs text-red-600 hover:underline">Remove</button>
+                        <button onClick={() => setForm({...form, photo_url: ''})} className="px-3 py-1 bg-red-50 text-red-600 text-xs font-bold rounded-md hover:bg-red-100 transition-colors">
+                          Remove
+                        </button>
                       )}
                    </div>
                    <div>
